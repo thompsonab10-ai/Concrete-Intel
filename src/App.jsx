@@ -192,9 +192,19 @@ function MaterialPricingPanel({ sqft, thickness, psi, rebar, accessDifficulty, p
   const concCost = (parseFloat(cy) * concPrice.price);
 
   let rebarCost = 0, rebarLabel = "-";
-  if (rebar === "wwf") { rebarCost = sf * P.wwf.price; rebarLabel = `${sf} SF × $${P.wwf.price}/SF`; }
-  else if (rebar === "yes") { const lb = sf * 0.55; rebarCost = lb * P.rebar_4.price; rebarLabel = `${lb.toFixed(0)} LB × $${P.rebar_4.price}/LB`; }
-  else if (rebar === "heavy") { const lb = sf * 0.85; rebarCost = lb * P.rebar_5.price; rebarLabel = `${lb.toFixed(0)} LB × $${P.rebar_5.price}/LB`; }
+  if (rebar !== "none" && P[rebar]) {
+    const rebarItem = P[rebar];
+    if (rebarItem.unit === "SF") {
+      rebarCost = sf * rebarItem.price;
+      rebarLabel = `${sf} SF × $${rebarItem.price}/SF`;
+    } else {
+      // LB-based — estimate weight
+      const lbPerSF = rebar.includes("5") ? 0.85 : 0.55;
+      const lb = sf * lbPerSF;
+      rebarCost = lb * rebarItem.price;
+      rebarLabel = `${lb.toFixed(0)} LB × $${rebarItem.price}/LB`;
+    }
+  }
 
   const vaporCost = sf * P.vapor_barrier.price;
   const curingCost = sf * P.curing_compound.price;
@@ -705,7 +715,7 @@ export default function ConcreteIntelTool() {
           { type: "text", text: userPrompt },
         ]
       : userPrompt;
-    const res = await fetch("/api/claude", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -768,7 +778,7 @@ Pour Type: ${bidForm.pourType}
 Square Footage: ${bidForm.sqft} SF
 Thickness: ${bidForm.thickness} inches
 Concrete Strength: ${bidForm.psi} PSI
-Rebar Required: ${bidForm.rebar}
+Rebar Required: ${bidForm.rebar === "none" ? "None" : (prices[bidForm.rebar]?.label || bidForm.rebar)} ${bidForm.rebar !== "none" && prices[bidForm.rebar] ? `@ $${prices[bidForm.rebar].price}/${prices[bidForm.rebar].unit}` : ""}
 Access/Site Difficulty: ${bidForm.accessDifficulty}
 Finish Type: ${bidForm.finishType}
 Additional Notes: ${bidForm.notes || "None"}
@@ -868,7 +878,7 @@ Be specific to what you actually see. If a photo is unclear, say so for that ite
     ];
 
     try {
-      const res = await fetch("/api/claude", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -976,8 +986,11 @@ Estimated Cost Impact: ${coForm.manualOverride ? (coForm.manualCostImpact || "To
       const tk = parseFloat(coForm.addedThickness || 4);
       const cy = sf > 0 ? (sf * (tk / 12)) / 27 * 1.05 : 0;
       const concreteCost = cy * (P[`concrete_${bidForm.psi}`]?.price || P.concrete_3000?.price || 155);
-      const rebarLbPerSF = coForm.rebarType === "yes" ? 0.55 : coForm.rebarType === "heavy" ? 0.85 : 0;
-      const rebarCost = coForm.rebarType === "wwf" ? sf * (P.wwf?.price || 0.18) : sf * rebarLbPerSF * (P[coForm.rebarType === "heavy" ? "rebar_5" : "rebar_4"]?.price || 0.68);
+      const rebarItem = P[coForm.rebarType];
+      const rebarLbPerSF = coForm.rebarType?.includes("5") ? 0.85 : 0.55;
+      const rebarCost = coForm.rebarType === "none" || !rebarItem ? 0
+        : rebarItem.unit === "SF" ? sf * rebarItem.price
+        : sf * rebarLbPerSF * rebarItem.price;
       const laborCost = parseFloat(coForm.addedLaborHours || 0) * (P[coForm.addedLaborRole]?.price || P.laborer?.price || 42);
       const equipCost = parseFloat(coForm.equipmentDays || 0) * (P[coForm.equipmentType]?.price || 0);
       const sfCost = sf * ((P.placement_labor?.price || 1.20) + (P.finishing_labor?.price || 2.85));
@@ -1341,18 +1354,35 @@ Our Company: ${brand.companyName || "Not specified"}`;
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
                 <div>
-                  <label style={labelStyle}>CONCRETE PSI</label>
+                  <label style={labelStyle}>CONCRETE MIX</label>
                   <select style={inputStyle} value={bidForm.psi} onChange={e => setBidForm({ ...bidForm, psi: e.target.value })}>
-                    {["2500","3000","3500","4000","4500","5000"].map(p => <option key={p} value={p}>{p}</option>)}
+                    {Object.entries(prices)
+                      .filter(([, v]) => v.group === "Concrete")
+                      .map(([key, item]) => {
+                        // Extract PSI value from key (e.g. concrete_3000 → 3000)
+                        const psiMatch = key.match(/concrete_(\d+)/);
+                        const psiVal = psiMatch ? psiMatch[1] : key;
+                        return (
+                          <option key={key} value={psiVal}>
+                            {item.label} — ${item.price}/{item.unit}
+                          </option>
+                        );
+                      })
+                    }
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>REBAR / WWF</label>
+                  <label style={labelStyle}>REBAR / REINFORCEMENT</label>
                   <select style={inputStyle} value={bidForm.rebar} onChange={e => setBidForm({ ...bidForm, rebar: e.target.value })}>
                     <option value="none">None</option>
-                    <option value="wwf">WWF Only</option>
-                    <option value="yes">#4 Rebar Grid</option>
-                    <option value="heavy">#5 Heavy Rebar</option>
+                    {Object.entries(prices)
+                      .filter(([, v]) => v.group === "Reinforcement")
+                      .map(([key, item]) => (
+                        <option key={key} value={key}>
+                          {item.label} — ${item.price}/{item.unit}
+                        </option>
+                      ))
+                    }
                   </select>
                 </div>
               </div>
@@ -1552,10 +1582,11 @@ Our Company: ${brand.companyName || "Not specified"}`;
                   const sfVal = parseFloat(coForm.addedSF || 0);
                   const tk = parseFloat(coForm.addedThickness || 4);
                   const cyVal = sfVal > 0 ? (sfVal * (tk / 12)) / 27 * 1.05 : 0;
-                  const rebarLbPerSF = coForm.rebarType === "yes" ? 0.55 : coForm.rebarType === "heavy" ? 0.85 : 0;
-                  const rebarCost = coForm.rebarType === "wwf" ? sfVal * (P.wwf?.price || 0.18)
-                    : coForm.rebarType === "none" ? 0
-                    : sfVal * rebarLbPerSF * (P[coForm.rebarType === "heavy" ? "rebar_5" : "rebar_4"]?.price || 0.68);
+                  const rebarItem2 = P[coForm.rebarType];
+                  const rebarLbPerSF = coForm.rebarType?.includes("5") ? 0.85 : 0.55;
+                  const rebarCost = coForm.rebarType === "none" || !rebarItem2 ? 0
+                    : rebarItem2.unit === "SF" ? sfVal * rebarItem2.price
+                    : sfVal * rebarLbPerSF * rebarItem2.price;
                   const laborHrs = parseFloat(coForm.addedLaborHours || 0);
                   const equipDays = parseFloat(coForm.equipmentDays || 0);
                   const concreteRate = P[`concrete_${bidForm.psi}`]?.price || P.concrete_3000?.price || 155;
@@ -1589,9 +1620,12 @@ Our Company: ${brand.companyName || "Not specified"}`;
                         <label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>REBAR / REINFORCEMENT</label>
                         <select style={{ ...inputStyle, fontSize: "12px" }} value={coForm.rebarType} onChange={e => setCoForm({ ...coForm, rebarType: e.target.value })}>
                           <option value="none">None</option>
-                          <option value="wwf">WWF Only — ${prices.wwf?.price || 0.18}/SF</option>
-                          <option value="yes">#4 Rebar Grid — ${prices.rebar_4?.price || 0.68}/LB</option>
-                          <option value="heavy">#5 Heavy Rebar — ${prices.rebar_5?.price || 0.72}/LB</option>
+                          {Object.entries(prices)
+                            .filter(([, v]) => v.group === "Reinforcement")
+                            .map(([key, item]) => (
+                              <option key={key} value={key}>{item.label} — ${item.price}/{item.unit}</option>
+                            ))
+                          }
                         </select>
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "8px" }}>
@@ -1615,7 +1649,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                         {[
                           concreteCost > 0 && [`Concrete (${cyVal.toFixed(1)} CY @ $${concreteRate})`, concreteCost],
                           sfCost > 0 && [`Placement + Finish (${sfVal} SF)`, sfCost],
-                          rebarCost > 0 && [`Reinforcement (${coForm.rebarType === "wwf" ? "WWF" : coForm.rebarType === "heavy" ? "#5 Rebar" : "#4 Rebar"})`, rebarCost],
+                          rebarCost > 0 && [`Reinforcement (${P[coForm.rebarType]?.label || coForm.rebarType})`, rebarCost],
                           laborCost > 0 && [`${P[coForm.addedLaborRole]?.label || "Labor"} (${laborHrs} hrs)`, laborCost],
                           equipCost > 0 && [`${P[coForm.equipmentType]?.label || "Equipment"} (${equipDays} day${equipDays !== 1 ? "s" : ""})`, equipCost],
                           subtotal > 0 && ["Overhead (12%)", overhead],
