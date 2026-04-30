@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
-const PHASES = ["SITE INTEL", "BID ENGINE", "AS-BUILT", "CHANGE ORDER", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
+const PHASES = ["SITE INTEL", "BID ENGINE", "AS-BUILT", "CHANGE ORDER", "SUB SCOPE", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
 
 // ── Default prices — contractor overrides these in PRICE BOOK ────────
 const DEFAULT_PRICES = {
@@ -85,13 +85,13 @@ function StatusBar({ text, type = "idle" }) {
   );
 }
 
-function OutputPanel({ content, title }) {
+function OutputPanel({ content, title, accent = "#f5a623" }) {
   if (!content) return null;
   return (
     <div style={{
-      background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: "3px solid #f5a623", padding: "16px", marginTop: "16px",
+      background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: `3px solid ${accent}`, padding: "16px", marginTop: "16px",
     }}>
-      <div style={{ ...labelStyle, marginBottom: "12px" }}>{title}</div>
+      <div style={{ ...labelStyle, color: accent, marginBottom: "12px" }}>{title}</div>
       <pre style={{
         color: "#c8bfa8", fontFamily: "'Courier New', monospace", fontSize: "12px",
         whiteSpace: "pre-wrap", lineHeight: "1.7", margin: 0,
@@ -254,48 +254,99 @@ function MaterialPricingPanel({ sqft, thickness, psi, rebar, accessDifficulty, p
 
 // ── Job History Panel ──────────────────────────────────────────────
 function JobHistoryPanel({ jobs, onLoad, onDelete }) {
+  const [expandedKey, setExpandedKey] = useState(null);
+
   if (jobs.length === 0) return (
     <div style={{ color: "#444", fontSize: "11px", letterSpacing: "1px", textAlign: "center", padding: "60px 0" }}>
       NO SAVED JOBS<br /><span style={{ fontSize: "10px", marginTop: "8px", display: "block" }}>SAVE YOUR FIRST BID TO SEE IT HERE</span>
     </div>
   );
 
+  // Group by projectKey
+  const grouped = {};
+  jobs.forEach(job => {
+    const key = job.projectKey || `legacy_${job.id}`;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(job);
+  });
+
+  // Sort each group by version descending
+  Object.values(grouped).forEach(group => group.sort((a, b) => (b.version || 1) - (a.version || 1)));
+
+  // Sort groups by latest job date
+  const sortedGroups = Object.entries(grouped).sort(([, a], [, b]) => b[0].id - a[0].id);
+
   return (
     <div>
-      {jobs.map((job, i) => (
-        <div key={job.id} style={{
-          background: "#0d0d0d", border: "1px solid #2a2a2a", marginBottom: "10px", padding: "12px",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-            <div>
-              <div style={{ color: "#f0ece0", fontSize: "13px", letterSpacing: "0.5px" }}>{job.address || "NO ADDRESS"}</div>
-              <div style={{ color: "#666", fontSize: "10px", letterSpacing: "1px", marginTop: "2px" }}>{job.savedAt}</div>
-            </div>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <button onClick={() => onLoad(job)} style={{
-                background: "#f5a623", color: "#000", border: "none", padding: "5px 10px",
-                fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
-              }}>LOAD</button>
-              <button onClick={() => onDelete(job.id)} style={{
-                background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "5px 10px",
-                fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
-              }}>DEL</button>
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
-            {[
-              { l: "POUR TYPE", v: job.bidForm?.pourType || "-" },
-              { l: "SQUARE FT", v: job.bidForm?.sqft ? `${job.bidForm.sqft} SF` : "-" },
-              { l: "THICKNESS", v: job.bidForm?.thickness ? `${job.bidForm.thickness}"` : "-" },
-            ].map(({ l, v }) => (
-              <div key={l} style={{ background: "#111", padding: "6px 8px" }}>
-                <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "2px" }}>{l}</div>
-                <div style={{ fontSize: "11px", color: "#888" }}>{v}</div>
+      {sortedGroups.map(([key, revisions]) => {
+        const latest = revisions[0];
+        const isExpanded = expandedKey === key;
+        const hasMultiple = revisions.length > 1;
+
+        return (
+          <div key={key} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", marginBottom: "12px" }}>
+            {/* Project header */}
+            <div style={{ padding: "12px", borderBottom: hasMultiple ? "1px solid #1a1a1a" : "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: "#f0ece0", fontSize: "13px", marginBottom: "2px" }}>
+                    {latest.jobInfo?.projectName || latest.address || "NO ADDRESS"}
+                  </div>
+                  {latest.jobInfo?.projectName && <div style={{ color: "#666", fontSize: "10px", marginBottom: "2px" }}>{latest.address}</div>}
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344", borderRadius: "4px", padding: "1px 6px", fontSize: "9px", letterSpacing: "1px" }}>
+                      v{latest.version || 1} — LATEST
+                    </span>
+                    {hasMultiple && <span style={{ color: "#555", fontSize: "9px", letterSpacing: "1px" }}>{revisions.length} REVISIONS</span>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "8px" }}>
+                  <button onClick={() => onLoad(latest)} style={{ background: "#f5a623", color: "#000", border: "none", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>LOAD</button>
+                  {hasMultiple && (
+                    <button onClick={() => setExpandedKey(isExpanded ? null : key)} style={{ background: "transparent", color: "#2196f3", border: "1px solid #2196f344", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>
+                      {isExpanded ? "▲" : "▼"} REVS
+                    </button>
+                  )}
+                  <button onClick={() => onDelete(latest.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
+                </div>
               </div>
-            ))}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px" }}>
+                {[
+                  { l: "POUR TYPE", v: latest.bidForm?.pourType || "-" },
+                  { l: "SQUARE FT", v: latest.bidForm?.sqft ? `${latest.bidForm.sqft} SF` : "-" },
+                  { l: "THICKNESS", v: latest.bidForm?.thickness ? `${latest.bidForm.thickness}"` : "-" },
+                ].map(({ l, v }) => (
+                  <div key={l} style={{ background: "#111", padding: "5px 8px" }}>
+                    <div style={{ fontSize: "8px", letterSpacing: "1px", color: "#555", marginBottom: "2px" }}>{l}</div>
+                    <div style={{ fontSize: "10px", color: "#888" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Revision history — expanded */}
+            {isExpanded && (
+              <div style={{ padding: "8px 12px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555", marginBottom: "8px" }}>ALL REVISIONS</div>
+                {revisions.map(rev => (
+                  <div key={rev.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: "4px", background: "#111", border: "1px solid #1a1a1a" }}>
+                    <div>
+                      <span style={{ background: rev.version === latest.version ? "#f5a62322" : "#1a1a1a", color: rev.version === latest.version ? "#f5a623" : "#666", border: `1px solid ${rev.version === latest.version ? "#f5a62344" : "#2a2a2a"}`, borderRadius: "4px", padding: "1px 6px", fontSize: "9px", marginRight: "8px" }}>
+                        v{rev.version || 1}
+                      </span>
+                      <span style={{ color: "#666", fontSize: "10px" }}>{rev.savedAt}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <button onClick={() => onLoad(rev)} style={{ background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "4px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>LOAD</button>
+                      <button onClick={() => onDelete(rev.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "4px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -510,17 +561,22 @@ export default function ConcreteIntelTool() {
   const [coOutput, setCoOutput] = useState("");
   const [coStatus, setCoStatus] = useState({ text: "AWAITING INPUT", type: "idle" });
 
+  // Sub Scope state
+  const [scopeForm, setScopeForm] = useState({
+    subName: "", subTrade: "Concrete", projectName: "", projectAddress: "",
+    gcName: "", bidDueDate: "", workStartDate: "", scopeDescription: "",
+    inclusions: "", exclusions: "", specialRequirements: "",
+  });
+  const [scopeOutput, setScopeOutput] = useState("");
+  const [scopeStatus, setScopeStatus] = useState({ text: "AWAITING INPUT", type: "idle" });
+
   const [sitePhotos, setSitePhotos] = useState([]); // [{name, base64, preview}]
   const [asBuiltOutput, setAsBuiltOutput] = useState("");
   const [asBuiltStatus, setAsBuiltStatus] = useState({ text: "NO PHOTOS LOADED", type: "idle" });
 
-  const [jobs, setJobs] = useState(() => {
-    try {
-      const stored = window.storage ? null : null; // Use in-memory only
-      return [];
-    } catch { return []; }
-  });
+  const [jobs, setJobs] = useState([]);
   const [savedMsg, setSavedMsg] = useState("");
+  const [currentJobKey, setCurrentJobKey] = useState(null); // tracks which job we're revising
 
   const fileRef = useRef();
   const jobsRef = useRef([]);
@@ -590,24 +646,36 @@ export default function ConcreteIntelTool() {
 
   const saveJob = async () => {
     if (!bidOutput) return;
+
+    // Determine project key — group by address + project name
+    const projectKey = `${address || "no-address"}__${jobInfo.projectName || "no-project"}`;
+
+    // Find existing revisions for this project
+    const existingRevisions = jobs.filter(j => j.projectKey === projectKey);
+    const nextVersion = existingRevisions.length > 0
+      ? Math.max(...existingRevisions.map(j => j.version || 1)) + 1
+      : 1;
+
     const job = {
       id: Date.now(),
+      projectKey,
+      version: nextVersion,
       address,
+      jobInfo: { ...jobInfo },
       bidForm: { ...bidForm },
       bidOutput,
       savedAt: new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
     };
+
     try {
       await window.storage.set(`job:${job.id}`, JSON.stringify(job));
       await loadJobsFromStorage();
-      setSavedMsg("JOB SAVED ✓");
-      setTimeout(() => setSavedMsg(""), 3000);
     } catch {
-      // Fallback to in-memory
       setJobs(prev => [job, ...prev]);
-      setSavedMsg("SAVED (IN-MEMORY) ✓");
-      setTimeout(() => setSavedMsg(""), 3000);
     }
+    setCurrentJobKey(projectKey);
+    setSavedMsg(`v${nextVersion} SAVED ✓`);
+    setTimeout(() => setSavedMsg(""), 3000);
   };
 
   const deleteJob = async (id) => {
@@ -623,7 +691,9 @@ export default function ConcreteIntelTool() {
     setAddress(job.address || "");
     setBidForm(job.bidForm);
     setBidOutput(job.bidOutput);
-    setBidStatus({ text: "BID LOADED FROM HISTORY", type: "success" });
+    if (job.jobInfo) setJobInfo(job.jobInfo);
+    setCurrentJobKey(job.projectKey || null);
+    setBidStatus({ text: `v${job.version || 1} LOADED FROM HISTORY`, type: "success" });
     setPhase(1);
   };
 
@@ -972,6 +1042,124 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
     document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
+  const runSubScope = async () => {
+    if (!scopeForm.scopeDescription) return;
+    setScopeStatus({ text: "GENERATING SCOPE LETTER...", type: "loading" });
+    setScopeOutput("");
+
+    const sys = `You are a construction contract administrator specializing in concrete subcontracting. 
+Generate a professional subcontractor scope of work letter in PLAIN TEXT ONLY. No markdown, no asterisks.
+Use this exact format:
+
+[Date]
+
+[Sub Company Name]
+[Trade] Subcontractor
+
+RE: REQUEST FOR PROPOSAL — [Project Name]
+
+Dear [Sub Name / Sir or Madam],
+
+We are soliciting a proposal from your firm for the following scope of work on the above-referenced project. Please review the scope carefully and submit your pricing by the bid due date.
+
+═══════════════════════════════════════════
+PROJECT INFORMATION
+═══════════════════════════════════════════
+Project Name:      [project]
+Project Address:   [address]
+General Contractor: [GC name]
+Bid Due Date:      [date]
+Anticipated Start: [start date]
+
+═══════════════════════════════════════════
+SCOPE OF WORK
+═══════════════════════════════════════════
+[Detailed description of work required]
+
+═══════════════════════════════════════════
+INCLUSIONS
+═══════════════════════════════════════════
+The following items ARE included in this scope:
+- [item]
+- [item]
+
+═══════════════════════════════════════════
+EXCLUSIONS
+═══════════════════════════════════════════
+The following items are NOT included and must be provided by others:
+- [item]
+- [item]
+
+═══════════════════════════════════════════
+SPECIAL REQUIREMENTS
+═══════════════════════════════════════════
+[Any special conditions, safety requirements, scheduling constraints]
+
+═══════════════════════════════════════════
+PROPOSAL REQUIREMENTS
+═══════════════════════════════════════════
+Please include the following with your proposal:
+- Lump sum base bid
+- Any applicable unit prices
+- Schedule of values if applicable
+- Confirmation of insurance requirements
+- List of any clarifications or qualifications
+
+Please direct all questions to the undersigned. We look forward to receiving your proposal.
+
+Sincerely,
+
+${brand.companyName || "___________________________"}
+${brand.phone || ""}
+${brand.email || ""}
+
+PLAIN TEXT ONLY. Be specific and professional.`;
+
+    const usr = `Generate a subcontractor scope letter with these details:
+Sub Company: ${scopeForm.subName || "Subcontractor"}
+Trade: ${scopeForm.subTrade}
+Project: ${scopeForm.projectName || address || "Not specified"}
+Project Address: ${scopeForm.projectAddress || address || "Not specified"}
+GC: ${scopeForm.gcName || jobInfo.gcName || "Not specified"}
+Bid Due: ${scopeForm.bidDueDate || "TBD"}
+Work Start: ${scopeForm.workStartDate || "TBD"}
+Scope: ${scopeForm.scopeDescription}
+Inclusions: ${scopeForm.inclusions || "Standard for this trade"}
+Exclusions: ${scopeForm.exclusions || "Permits, inspection fees, bond"}
+Special Requirements: ${scopeForm.specialRequirements || "None"}
+Our Company: ${brand.companyName || "Not specified"}`;
+
+    try {
+      const raw = await callClaude(sys, usr);
+      const result = raw.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s+/gm, "");
+      setScopeOutput(result);
+      setScopeStatus({ text: "SCOPE LETTER COMPLETE — REVIEW BEFORE SENDING", type: "success" });
+    } catch (e) {
+      setScopeStatus({ text: `ERROR: ${e.message || "CHECK CONNECTION"}`, type: "error" });
+    }
+  };
+
+  const exportSubScope = () => {
+    if (!scopeOutput) return;
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const fn = `ScopeOfWork_${(scopeForm.subName || "Sub").replace(/[^a-z0-9]/gi, "_").slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.html`;
+    const cn = brand.companyName || "CONCRETE SITE INTELLIGENCE";
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SCOPE OF WORK</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;background:#fff;color:#111;padding:48px;max-width:900px;margin:0 auto}.header{border-bottom:3px solid #f5a623;padding-bottom:20px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-end}.co-name{font-size:20px;font-weight:bold;letter-spacing:2px}.co-sub{font-size:10px;letter-spacing:3px;color:#f5a623;margin-top:4px}.co-meta{font-size:10px;color:#888;margin-top:2px}.contact{font-size:10px;color:#888;text-align:right;line-height:1.7}.output{white-space:pre-wrap;line-height:1.9;font-size:12px}.footer{margin-top:48px;border-top:1px solid #ddd;padding-top:16px;font-size:9px;color:#aaa;display:flex;justify-content:space-between}@media print{body{padding:24px}@page{margin:1in}}</style>
+</head><body>
+<div class="header"><div><div class="co-name">${cn.toUpperCase()}</div><div class="co-sub">SUBCONTRACTOR SCOPE OF WORK</div>${brand.licenseNumber ? `<div class="co-meta">LIC# ${brand.licenseNumber}</div>` : ""}</div>
+<div class="contact"><div>${date}</div>${brand.phone ? `<div>${brand.phone}</div>` : ""}${brand.email ? `<div>${brand.email}</div>` : ""}</div></div>
+<div class="output">${scopeOutput.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+<div class="footer"><span>${cn.toUpperCase()}</span><span>CONFIDENTIAL — FOR BIDDING PURPOSES ONLY</span></div>
+</body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fn;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
   const mapSrc = address
     ? `https://www.openstreetmap.org/export/embed.html?layer=mapnik&query=${encodeURIComponent(address)}`
     : null;
@@ -986,10 +1174,22 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
         ::-webkit-scrollbar-thumb { background: #333; }
         button:hover { opacity: 0.85; transform: translateY(-1px); }
         button { transition: all 0.15s; }
+        input, select, textarea { font-size: 16px !important; }
+        @media (max-width: 768px) {
+          .panel-container { flex-direction: column !important; height: auto !important; overflow: visible !important; }
+          .left-panel { width: 100% !important; min-width: 100% !important; border-right: none !important; border-bottom: 1px solid #1e1e1e; max-height: none !important; }
+          .right-panel { min-height: 50vh; }
+          .tab-bar { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
+          .tab-bar button { padding: 11px 14px !important; font-size: 9px !important; flex-shrink: 0; }
+          .header-bar { padding: 12px 16px !important; }
+          .header-bar .co-name { font-size: 14px !important; }
+          .address-bar { padding: 10px 16px !important; }
+          .form-grid-2 { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       {/* Header */}
-      <div style={{ background: "#111", borderBottom: "2px solid #f5a623", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="header-bar" style={{ background: "#111", borderBottom: "2px solid #f5a623", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#f5a623", marginBottom: "2px" }}>
             {brand.companyName ? brand.companyName.toUpperCase() : "CONCRETE SITE INTELLIGENCE"}
@@ -1010,7 +1210,7 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
 
       {/* Address Bar */}
       {/* Address Bar with Autocomplete */}
-      <div style={{ background: "#111", padding: "12px 24px", borderBottom: "1px solid #1e1e1e", position: "relative", zIndex: 100 }}>
+      <div className="address-bar" style={{ background: "#111", padding: "12px 24px", borderBottom: "1px solid #1e1e1e", position: "relative", zIndex: 100 }}>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <div style={{ flex: 1, position: "relative" }}>
             <input
@@ -1068,22 +1268,22 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
       </div>
 
       {/* Phase Tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid #1e1e1e", background: "#0d0d0d" }}>
+      <div className="tab-bar" style={{ display: "flex", borderBottom: "1px solid #1e1e1e", background: "#0d0d0d", overflowX: "auto" }}>
         {PHASES.map((p, i) => (
           <button key={p} onClick={() => setPhase(i)} style={{
             background: phase === i ? "#1a1a1a" : "transparent",
             color: phase === i ? "#f5a623" : "#555",
             border: "none", borderBottom: phase === i ? "2px solid #f5a623" : "2px solid transparent",
-            padding: "12px 24px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "3px", cursor: "pointer",
+            padding: "12px 20px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
           }}>{p}{p === "JOB HISTORY" && jobs.length > 0 && <span style={{ marginLeft: "6px", background: "#f5a623", color: "#000", borderRadius: "8px", padding: "1px 6px", fontSize: "9px" }}>{jobs.length}</span>}</button>
         ))}
       </div>
 
       {/* Content */}
-      <div style={{ display: "flex", height: "calc(100vh - 168px)", overflow: "hidden" }}>
+      <div className="panel-container" style={{ display: "flex", height: "calc(100vh - 168px)", overflow: "hidden" }}>
 
         {/* Left Panel */}
-        <div style={{ width: "380px", minWidth: "380px", overflowY: "auto", borderRight: "1px solid #1e1e1e", padding: "20px" }}>
+        <div className="left-panel" style={{ width: "380px", minWidth: "380px", overflowY: "auto", borderRight: "1px solid #1e1e1e", padding: "20px" }}>
 
           {/* PHASE 0: Site Intel */}
           {phase === 0 && (
@@ -1450,8 +1650,85 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
             </>
           )}
 
-          {/* PHASE 4: Job History Controls */}
+          {/* PHASE 4: Sub Scope */}
           {phase === 4 && (
+            <>
+              <SectionLabel>SUBCONTRACTOR SCOPE LETTER</SectionLabel>
+              <div style={{ background: "#111", border: "1px solid #9c27b033", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", lineHeight: "1.7" }}>
+                Generate a formal scope of work letter to send to a subcontractor for pricing.
+              </div>
+
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>SUB COMPANY NAME</label>
+                <input style={inputStyle} placeholder="ABC Rebar LLC" value={scopeForm.subName} onChange={e => setScopeForm({ ...scopeForm, subName: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>TRADE</label>
+                <select style={inputStyle} value={scopeForm.subTrade} onChange={e => setScopeForm({ ...scopeForm, subTrade: e.target.value })}>
+                  {["Concrete", "Rebar / Reinforcing", "Formwork", "Excavation", "Waterproofing", "Surveying", "Soil Testing", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>PROJECT NAME</label>
+                <input style={inputStyle} placeholder={jobInfo.projectName || "Project name"} value={scopeForm.projectName} onChange={e => setScopeForm({ ...scopeForm, projectName: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>PROJECT ADDRESS</label>
+                <input style={inputStyle} placeholder={address || "Job site address"} value={scopeForm.projectAddress} onChange={e => setScopeForm({ ...scopeForm, projectAddress: e.target.value })} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                <div>
+                  <label style={{ ...labelStyle, color: "#9c27b0" }}>BID DUE DATE</label>
+                  <input style={inputStyle} type="date" value={scopeForm.bidDueDate} onChange={e => setScopeForm({ ...scopeForm, bidDueDate: e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, color: "#9c27b0" }}>WORK START DATE</label>
+                  <input style={inputStyle} type="date" value={scopeForm.workStartDate} onChange={e => setScopeForm({ ...scopeForm, workStartDate: e.target.value })} />
+                </div>
+              </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>SCOPE DESCRIPTION *</label>
+                <textarea style={{ ...inputStyle, height: "80px", resize: "vertical" }}
+                  placeholder="Describe the work required — e.g. Furnish and install all rebar for 2,400 SF slab on grade, 4' thick, per structural drawings..."
+                  value={scopeForm.scopeDescription}
+                  onChange={e => setScopeForm({ ...scopeForm, scopeDescription: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>INCLUSIONS</label>
+                <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }}
+                  placeholder="What IS included — materials, labor, equipment..."
+                  value={scopeForm.inclusions}
+                  onChange={e => setScopeForm({ ...scopeForm, inclusions: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>EXCLUSIONS</label>
+                <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }}
+                  placeholder="What is NOT included — permits, testing, etc..."
+                  value={scopeForm.exclusions}
+                  onChange={e => setScopeForm({ ...scopeForm, exclusions: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={{ ...labelStyle, color: "#9c27b0" }}>SPECIAL REQUIREMENTS</label>
+                <input style={inputStyle} placeholder="Safety requirements, scheduling constraints..."
+                  value={scopeForm.specialRequirements}
+                  onChange={e => setScopeForm({ ...scopeForm, specialRequirements: e.target.value })} />
+              </div>
+
+              <button onClick={runSubScope} disabled={!scopeForm.scopeDescription || scopeStatus.type === "loading"} style={{
+                width: "100%",
+                background: scopeForm.scopeDescription ? "#9c27b0" : "#2a2a2a",
+                color: scopeForm.scopeDescription ? "#fff" : "#555",
+                border: "none", padding: "13px", fontFamily: "'Courier New', monospace",
+                fontSize: "11px", letterSpacing: "3px", fontWeight: "bold",
+                cursor: scopeForm.scopeDescription ? "pointer" : "not-allowed",
+              }}>
+                {scopeStatus.type === "loading" ? "◌ GENERATING..." : "▶ GENERATE SCOPE LETTER"}
+              </button>
+            </>
+          )}
+
+          {/* PHASE 5: Job History Controls */}
+          {phase === 5 && (
             <>
               <SectionLabel>JOB HISTORY</SectionLabel>
               <div style={{ background: "#111", border: "1px solid #2a2a2a", padding: "10px 12px", marginBottom: "12px", fontSize: "11px" }}>
@@ -1467,7 +1744,7 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
           )}
 
           {/* PHASE 5: Price Book */}
-          {phase === 5 && (
+          {phase === 6 && (
             <>
               <SectionLabel>PRICE BOOK</SectionLabel>
               <div style={{ background: "#111", border: "1px solid #2196f333", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", lineHeight: "1.7" }}>
@@ -1525,7 +1802,7 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
           )}
 
           {/* PHASE 6: Settings */}
-          {phase === 6 && (
+          {phase === 7 && (
             <>
               <SectionLabel>COMPANY BRANDING</SectionLabel>
               <div style={{ color: "#666", fontSize: "10px", letterSpacing: "1px", marginBottom: "16px", lineHeight: "1.7" }}>
@@ -1562,7 +1839,7 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
         </div>
 
         {/* Right Panel */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px", background: "#0a0a0a" }}>
+        <div className="right-panel" style={{ flex: 1, overflowY: "auto", padding: "20px", background: "#0a0a0a" }}>
 
           {phase === 0 && (
             <>
@@ -1676,12 +1953,49 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
 
           {phase === 4 && (
             <>
+              <SectionLabel>SCOPE OF WORK LETTER</SectionLabel>
+              <StatusBar text={scopeStatus.text} type={scopeStatus.type} />
+
+              {/* Context banner if job info populated */}
+              {(scopeForm.projectName || scopeForm.subName) && (
+                <div style={{ background: "#111", border: "1px solid #9c27b033", borderLeft: "3px solid #9c27b0", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
+                  {scopeForm.subName && <div style={{ color: "#f0ece0", marginBottom: "2px" }}>To: {scopeForm.subName}</div>}
+                  {scopeForm.projectName && <div style={{ color: "#888" }}>Project: {scopeForm.projectName}</div>}
+                  {scopeForm.bidDueDate && <div style={{ color: "#888" }}>Bid Due: {scopeForm.bidDueDate}</div>}
+                </div>
+              )}
+
+              {scopeOutput ? (
+                <>
+                  <OutputPanel content={scopeOutput} title="SCOPE OF WORK LETTER — REVIEW BEFORE SENDING" accent="#9c27b0" />
+                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                    <button onClick={exportSubScope} style={{
+                      background: "#1a0d1a", color: "#9c27b0", border: "1px solid #9c27b044",
+                      padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
+                    }}>⬇ EXPORT SCOPE LETTER</button>
+                    <button onClick={() => { setScopeOutput(""); setScopeStatus({ text: "AWAITING INPUT", type: "idle" }); }} style={{
+                      background: "transparent", color: "#555", border: "1px solid #333",
+                      padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
+                    }}>↺ NEW SCOPE</button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ height: "380px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
+                  <div style={{ fontSize: "30px", marginBottom: "12px" }}>📄</div>
+                  <div style={{ fontSize: "11px", letterSpacing: "2px" }}>FILL FORM → GENERATE SCOPE LETTER</div>
+                </div>
+              )}
+            </>
+          )}
+
+          {phase === 5 && (
+            <>
               <SectionLabel>SAVED BIDS</SectionLabel>
               <JobHistoryPanel jobs={jobs} onLoad={loadJob} onDelete={deleteJob} />
             </>
           )}
 
-          {phase === 5 && (
+          {phase === 6 && (
             <>
               <SectionLabel>PRICE BOOK EDITOR</SectionLabel>
               <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "16px" }}>
@@ -1762,7 +2076,7 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
             </>
           )}
 
-          {phase === 6 && (
+          {phase === 7 && (
             <>
               <SectionLabel>BRAND PREVIEW</SectionLabel>
               <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: "3px solid #f5a623", padding: "24px" }}>
