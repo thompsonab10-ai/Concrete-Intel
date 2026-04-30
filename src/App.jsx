@@ -705,7 +705,7 @@ export default function ConcreteIntelTool() {
           { type: "text", text: userPrompt },
         ]
       : userPrompt;
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/claude", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -868,7 +868,7 @@ Be specific to what you actually see. If a photo is unclear, say so for that ite
     ];
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
