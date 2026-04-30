@@ -482,6 +482,8 @@ export default function ConcreteIntelTool() {
     Object.entries(DEFAULT_PRICES).forEach(([k, v]) => { p[k] = { ...v }; });
     return p;
   });
+  const [newPriceItem, setNewPriceItem] = useState({ label: "", price: "", unit: "SF", group: "Materials" });
+  const [editingPriceKey, setEditingPriceKey] = useState(null);
 
   const [jobInfo, setJobInfo] = useState({
     clientName: "", gcName: "", projectName: "", bidNumber: "", bidExpiry: "", poNumber: "",
@@ -1469,11 +1471,48 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
             <>
               <SectionLabel>PRICE BOOK</SectionLabel>
               <div style={{ background: "#111", border: "1px solid #2196f333", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", lineHeight: "1.7" }}>
-                Set your actual material, equipment, and labor rates. All bid estimates and takeoffs use these prices.
+                Add, edit, or delete any line item. All bids and takeoffs use these exact rates.
               </div>
-              <div style={{ color: "#555", fontSize: "10px", letterSpacing: "1px", marginBottom: "12px" }}>
-                Edit prices on the right → hit SAVE PRICE BOOK
+
+              {/* Add new item form */}
+              <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: "3px solid #2196f3", padding: "14px", marginBottom: "12px" }}>
+                <div style={{ ...labelStyle, color: "#2196f3", marginBottom: "10px" }}>ADD NEW LINE ITEM</div>
+                <div style={{ marginBottom: "8px" }}>
+                  <label style={{ ...labelStyle, fontSize: "9px" }}>ITEM NAME</label>
+                  <input style={inputStyle} placeholder="e.g. Wire Mesh 6x6" value={newPriceItem.label} onChange={e => setNewPriceItem({ ...newPriceItem, label: e.target.value })} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "9px" }}>PRICE ($)</label>
+                    <input style={inputStyle} type="number" step="0.01" placeholder="0.00" value={newPriceItem.price} onChange={e => setNewPriceItem({ ...newPriceItem, price: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "9px" }}>UNIT</label>
+                    <select style={inputStyle} value={newPriceItem.unit} onChange={e => setNewPriceItem({ ...newPriceItem, unit: e.target.value })}>
+                      {["SF", "CY", "LF", "LB", "EA", "DAY", "HR", "TON", "GAL", "LS"].map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginBottom: "10px" }}>
+                  <label style={{ ...labelStyle, fontSize: "9px" }}>CATEGORY</label>
+                  <select style={inputStyle} value={newPriceItem.group} onChange={e => setNewPriceItem({ ...newPriceItem, group: e.target.value })}>
+                    {[...new Set(Object.values(prices).map(p => p.group)), "Custom"].map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <button onClick={() => {
+                  if (!newPriceItem.label || !newPriceItem.price) return;
+                  const key = `custom_${Date.now()}`;
+                  const updated = { ...prices, [key]: { label: newPriceItem.label, price: parseFloat(newPriceItem.price), unit: newPriceItem.unit, group: newPriceItem.group } };
+                  savePrices(updated);
+                  setNewPriceItem({ label: "", price: "", unit: "SF", group: "Materials" });
+                }} style={{
+                  width: "100%", background: newPriceItem.label && newPriceItem.price ? "#2196f3" : "#2a2a2a",
+                  color: newPriceItem.label && newPriceItem.price ? "#fff" : "#555",
+                  border: "none", padding: "10px", fontFamily: "'Courier New', monospace",
+                  fontSize: "10px", letterSpacing: "2px", fontWeight: "bold", cursor: newPriceItem.label && newPriceItem.price ? "pointer" : "not-allowed",
+                }}>+ ADD ITEM</button>
               </div>
+
               <button onClick={() => savePrices({ ...prices })} style={{
                 width: "100%", background: "#2196f3", color: "#fff", border: "none", padding: "13px",
                 fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "3px", fontWeight: "bold", cursor: "pointer", marginBottom: "8px",
@@ -1646,41 +1685,79 @@ Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
             <>
               <SectionLabel>PRICE BOOK EDITOR</SectionLabel>
               <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "16px" }}>
-                Edit any rate and hit SAVE PRICE BOOK on the left. All bids and takeoffs update immediately.
+                Click any row to edit inline. Hit ✓ to confirm or ✕ to cancel. Delete removes the item permanently.
               </div>
-              {["Concrete", "Reinforcement", "Materials", "Equipment", "Labor"].map(group => {
+
+              {/* Group the items */}
+              {[...new Set(Object.values(prices).map(p => p.group))].map(group => {
                 const groupItems = Object.entries(prices).filter(([, v]) => v.group === group);
+                if (!groupItems.length) return null;
+                const groupColors = { Concrete: "#f5a623", Reinforcement: "#2196f3", Materials: "#4caf50", Equipment: "#9c27b0", Labor: "#e53935", Custom: "#00bcd4" };
+                const color = groupColors[group] || "#888";
                 return (
                   <div key={group} style={{ marginBottom: "20px" }}>
-                    <div style={{ fontSize: "9px", letterSpacing: "3px", color: group === "Labor" ? "#e53935" : group === "Equipment" ? "#9c27b0" : group === "Concrete" ? "#f5a623" : "#2196f3", marginBottom: "10px", borderBottom: "1px solid #2a2a2a", paddingBottom: "6px" }}>
-                      {group.toUpperCase()}
+                    <div style={{ fontSize: "9px", letterSpacing: "3px", color, marginBottom: "8px", borderBottom: `1px solid ${color}33`, paddingBottom: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{group.toUpperCase()}</span>
+                      <span style={{ color: "#555", fontSize: "9px" }}>{groupItems.length} ITEMS</span>
                     </div>
+
                     {groupItems.map(([key, item]) => (
-                      <div key={key} style={{ display: "grid", gridTemplateColumns: "2fr 100px 50px", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
-                        <div style={{ fontSize: "11px", color: "#888" }}>{item.label}</div>
-                        <div style={{ position: "relative" }}>
-                          <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#f5a623", fontSize: "12px" }}>$</span>
-                          <input
-                            style={{ ...inputStyle, paddingLeft: "22px", fontSize: "13px", textAlign: "right" }}
-                            type="number"
-                            step="0.01"
-                            value={item.price}
-                            onChange={e => {
-                              const updated = { ...prices, [key]: { ...prices[key], price: parseFloat(e.target.value) || 0 } };
-                              setPrices(updated);
-                            }}
-                          />
+                      editingPriceKey === key ? (
+                        // Editing row
+                        <div key={key} style={{ background: "#1a1a2a", border: "1px solid #2196f3", padding: "10px", marginBottom: "6px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 60px", gap: "6px", marginBottom: "6px" }}>
+                            <input style={{ ...inputStyle, fontSize: "12px" }} value={item.label}
+                              onChange={e => setPrices({ ...prices, [key]: { ...prices[key], label: e.target.value } })} />
+                            <div style={{ position: "relative" }}>
+                              <span style={{ position: "absolute", left: "8px", top: "50%", transform: "translateY(-50%)", color: "#f5a623", fontSize: "12px" }}>$</span>
+                              <input style={{ ...inputStyle, paddingLeft: "20px", fontSize: "12px", textAlign: "right" }} type="number" step="0.01" value={item.price}
+                                onChange={e => setPrices({ ...prices, [key]: { ...prices[key], price: parseFloat(e.target.value) || 0 } })} />
+                            </div>
+                            <select style={{ ...inputStyle, fontSize: "11px" }} value={item.unit}
+                              onChange={e => setPrices({ ...prices, [key]: { ...prices[key], unit: e.target.value } })}>
+                              {["SF", "CY", "LF", "LB", "EA", "DAY", "HR", "TON", "GAL", "LS"].map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                            <select style={{ ...inputStyle, fontSize: "11px" }} value={item.group}
+                              onChange={e => setPrices({ ...prices, [key]: { ...prices[key], group: e.target.value } })}>
+                              {[...new Set(Object.values(prices).map(p => p.group)), "Custom"].map(g => <option key={g} value={g}>{g}</option>)}
+                            </select>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button onClick={() => { savePrices({ ...prices }); setEditingPriceKey(null); }} style={{ flex: 1, background: "#4caf50", color: "#fff", border: "none", padding: "8px", fontFamily: "'Courier New', monospace", fontSize: "11px", cursor: "pointer" }}>✓ SAVE</button>
+                              <button onClick={() => setEditingPriceKey(null)} style={{ flex: 1, background: "transparent", color: "#888", border: "1px solid #333", padding: "8px", fontFamily: "'Courier New', monospace", fontSize: "11px", cursor: "pointer" }}>✕</button>
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", textAlign: "center" }}>/{item.unit}</div>
-                      </div>
+                      ) : (
+                        // Display row
+                        <div key={key} style={{ display: "grid", gridTemplateColumns: "2fr 80px 50px 60px", gap: "6px", alignItems: "center", marginBottom: "4px", padding: "8px 10px", background: "#0d0d0d", border: "1px solid #1a1a1a" }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = "#2a2a2a"}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = "#1a1a1a"}>
+                          <div style={{ fontSize: "11px", color: "#c8bfa8" }}>{item.label}</div>
+                          <div style={{ fontSize: "12px", color: "#f5a623", textAlign: "right", fontFamily: "'Courier New', monospace" }}>${item.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div style={{ fontSize: "10px", color: "#555", textAlign: "center" }}>/{item.unit}</div>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            <button onClick={() => setEditingPriceKey(key)} style={{ flex: 1, background: "transparent", color: "#2196f3", border: "1px solid #2196f333", padding: "4px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>EDIT</button>
+                            <button onClick={() => {
+                              if (window.confirm(`Delete "${item.label}"?`)) {
+                                const updated = { ...prices };
+                                delete updated[key];
+                                savePrices(updated);
+                              }
+                            }} style={{ flex: 1, background: "transparent", color: "#e53935", border: "1px solid #e5393533", padding: "4px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
+                          </div>
+                        </div>
+                      )
                     ))}
                   </div>
                 );
               })}
+
               <div style={{ background: "#111", border: "1px solid #2196f333", padding: "12px", fontSize: "10px", color: "#555", marginTop: "8px", lineHeight: "1.7" }}>
                 → Changes apply to all new bids immediately after saving<br/>
-                → Saved rates persist across sessions<br/>
-                → Reset to defaults restores 2025 market reference rates
+                → Custom items persist across sessions<br/>
+                → Reset to defaults removes all custom items
               </div>
             </>
           )}
