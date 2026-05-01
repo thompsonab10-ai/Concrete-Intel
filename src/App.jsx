@@ -1093,6 +1093,18 @@ export default function ConcreteIntelTool() {
     }
   };
 
+  const updateJobCloseout = async (id, closeout) => {
+    const job = jobs.find(j => j.id === id);
+    if (!job) return;
+    const updated = { ...job, closeout };
+    try {
+      await window.storage.set(`job:${id}`, JSON.stringify(updated));
+      await loadJobsFromStorage();
+    } catch {
+      setJobs(prev => prev.map(j => j.id === id ? updated : j));
+    }
+  };
+
   const loadJob = (job) => {
     setAddress(job.address || "");
     setBidForm(job.bidForm);
@@ -1722,6 +1734,37 @@ Our Company: ${brand.companyName || "Not specified"}`;
                   letterSpacing: "2px", cursor: "pointer", marginBottom: "6px", textAlign: "left",
                 }}>{label}</button>
               ))}
+
+              {/* Profit summary — only shows when closed jobs have actuals */}
+              {(() => {
+                const closedJobs = jobs.filter(j => j.status === "won" && j.closeout?.actualCost);
+                if (closedJobs.length === 0) return null;
+
+                const totalRevenue = closedJobs.reduce((s, j) => s + parseFloat(j.closeout.actualRevenue || 0), 0);
+                const totalCost = closedJobs.reduce((s, j) => s + parseFloat(j.closeout.actualCost || 0), 0);
+                const totalProfit = totalRevenue - totalCost;
+                const avgMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0;
+
+                return (
+                  <div style={{ marginTop: "12px" }}>
+                    <SectionLabel>PROFIT SUMMARY</SectionLabel>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                      {[
+                        { label: "TOTAL PROFIT", value: `$${totalProfit.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: totalProfit >= 0 ? "#4caf50" : "#e53935" },
+                        { label: "AVG MARGIN", value: `${avgMargin}%`, color: parseFloat(avgMargin) >= 20 ? "#4caf50" : parseFloat(avgMargin) >= 10 ? "#f5a623" : "#e53935" },
+                        { label: "TOTAL REVENUE", value: `$${totalRevenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#f0ece0" },
+                        { label: "TOTAL COST", value: `$${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#888" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", padding: "8px 10px" }}>
+                          <div style={{ fontSize: "7px", letterSpacing: "1px", color: "#444", marginBottom: "3px" }}>{label}</div>
+                          <div style={{ fontSize: "13px", fontWeight: "bold", color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: "9px", color: "#444", marginTop: "6px", letterSpacing: "0.5px" }}>Based on {closedJobs.length} closed job{closedJobs.length !== 1 ? "s" : ""}</div>
+                  </div>
+                );
+              })()}
             </>
           )}
 
@@ -2423,6 +2466,55 @@ Our Company: ${brand.companyName || "Not specified"}`;
                         })}
                       </div>
                     )}
+
+                    {/* Profit analytics — only if closeout data exists */}
+                    {(() => {
+                      const closedJobs = latest.filter(j => j.status === "won" && j.closeout?.actualCost);
+                      if (closedJobs.length === 0) return null;
+
+                      // Profit by pour type
+                      const profitByType = {};
+                      closedJobs.forEach(j => {
+                        const pt = j.bidForm?.pourType || "other";
+                        const revenue = parseFloat(j.closeout.actualRevenue || 0);
+                        const cost = parseFloat(j.closeout.actualCost || 0);
+                        const profit = revenue - cost;
+                        if (!profitByType[pt]) profitByType[pt] = { profit: 0, revenue: 0, count: 0 };
+                        profitByType[pt].profit += profit;
+                        profitByType[pt].revenue += revenue;
+                        profitByType[pt].count++;
+                      });
+
+                      const maxProfit = Math.max(...Object.values(profitByType).map(v => v.profit), 1);
+                      const sortedTypes = Object.entries(profitByType).sort(([,a],[,b]) => b.profit - a.profit);
+
+                      return (
+                        <div style={{ background: "#0d0d0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "14px", marginTop: "12px" }}>
+                          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50", marginBottom: "12px" }}>PROFIT BY POUR TYPE ({closedJobs.length} CLOSED JOBS)</div>
+                          {sortedTypes.map(([pt, data]) => {
+                            const margin = data.revenue > 0 ? ((data.profit / data.revenue) * 100).toFixed(1) : 0;
+                            const pct = Math.max(0, Math.round((data.profit / maxProfit) * 100));
+                            return (
+                              <div key={pt} style={{ marginBottom: "12px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                  <span style={{ fontSize: "10px", color: "#c8bfa8" }}>{pt.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                  <div style={{ display: "flex", gap: "12px" }}>
+                                    <span style={{ fontSize: "10px", color: data.profit >= 0 ? "#4caf50" : "#e53935", fontWeight: "bold" }}>
+                                      ${data.profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                    </span>
+                                    <span style={{ fontSize: "10px", color: parseFloat(margin) >= 20 ? "#4caf50" : "#f5a623" }}>{margin}% margin</span>
+                                    <span style={{ fontSize: "10px", color: "#555" }}>{data.count} job{data.count !== 1 ? "s" : ""}</span>
+                                  </div>
+                                </div>
+                                <div style={{ background: "#1a1a1a", height: "6px", borderRadius: "2px", overflow: "hidden" }}>
+                                  <div style={{ background: data.profit >= 0 ? "#4caf50" : "#e53935", height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
@@ -2546,6 +2638,70 @@ Our Company: ${brand.companyName || "Not specified"}`;
                             ))}
                           </div>
                           <div style={{ fontSize: "9px", color: "#444", marginTop: "8px", letterSpacing: "0.5px" }}>Last updated: {job.savedAt}</div>
+
+                          {/* Close-out panel — shows when WON */}
+                          {(job.status === "won") && (() => {
+                            const co = job.closeout || {};
+                            const bidMatch = job.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                            const bidVal = bidMatch ? parseFloat(bidMatch[1].replace(/,/g, "")) : 0;
+                            const revenue = parseFloat(co.actualRevenue || bidVal || 0);
+                            const cost = parseFloat(co.actualCost || 0);
+                            const profit = revenue - cost;
+                            const margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : null;
+                            const [editing, setEditing] = React.useState(false);
+                            const [form, setForm] = React.useState({ actualRevenue: co.actualRevenue || "", actualCost: co.actualCost || "", costNotes: co.costNotes || "" });
+
+                            return (
+                              <div style={{ marginTop: "10px", background: "#0d1a0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "10px 12px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                  <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50" }}>JOB CLOSE-OUT</div>
+                                  <button onClick={() => setEditing(!editing)} style={{ background: "transparent", color: "#4caf50", border: "1px solid #4caf5044", padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>
+                                    {editing ? "CANCEL" : "ENTER ACTUALS"}
+                                  </button>
+                                </div>
+
+                                {editing ? (
+                                  <div>
+                                    <div style={{ marginBottom: "8px" }}>
+                                      <label style={{ ...labelStyle, fontSize: "9px" }}>ACTUAL REVENUE ($)</label>
+                                      <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder={bidVal || "0"}
+                                        value={form.actualRevenue} onChange={e => setForm({ ...form, actualRevenue: e.target.value })} />
+                                    </div>
+                                    <div style={{ marginBottom: "8px" }}>
+                                      <label style={{ ...labelStyle, fontSize: "9px" }}>ACTUAL COST ($)</label>
+                                      <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="Total materials + labor + equipment"
+                                        value={form.actualCost} onChange={e => setForm({ ...form, actualCost: e.target.value })} />
+                                    </div>
+                                    <div style={{ marginBottom: "10px" }}>
+                                      <label style={{ ...labelStyle, fontSize: "9px" }}>NOTES</label>
+                                      <input style={inputStyle} placeholder="What drove cost over/under? Lessons learned..."
+                                        value={form.costNotes} onChange={e => setForm({ ...form, costNotes: e.target.value })} />
+                                    </div>
+                                    <button onClick={() => { updateJobCloseout(job.id, form); setEditing(false); }} style={{
+                                      width: "100%", background: "#4caf50", color: "#000", border: "none", padding: "8px",
+                                      fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer",
+                                    }}>✓ SAVE CLOSE-OUT</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                                    <div style={{ background: "#111", padding: "6px 8px" }}>
+                                      <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>REVENUE</div>
+                                      <div style={{ fontSize: "11px", color: "#f0ece0", fontWeight: "bold" }}>{revenue > 0 ? `$${revenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
+                                    </div>
+                                    <div style={{ background: "#111", padding: "6px 8px" }}>
+                                      <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>COST</div>
+                                      <div style={{ fontSize: "11px", color: "#e53935" }}>{cost > 0 ? `$${cost.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
+                                    </div>
+                                    <div style={{ background: profit > 0 ? "#0d1a0d" : "#1a0d0d", padding: "6px 8px", border: `1px solid ${profit > 0 ? "#4caf5033" : "#e5393533"}` }}>
+                                      <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>PROFIT {margin ? `(${margin}%)` : ""}</div>
+                                      <div style={{ fontSize: "11px", color: profit > 0 ? "#4caf50" : "#e53935", fontWeight: "bold" }}>{cost > 0 ? `$${profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
+                                    </div>
+                                  </div>
+                                )}
+                                {co.costNotes && !editing && <div style={{ fontSize: "9px", color: "#666", marginTop: "6px", fontStyle: "italic" }}>📝 {co.costNotes}</div>}
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
