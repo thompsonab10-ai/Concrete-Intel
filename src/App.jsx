@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
-const PHASES = ["SITE INTEL", "BID ENGINE", "AS-BUILT", "CHANGE ORDER", "SUB SCOPE", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
+const PHASES = ["DASHBOARD", "BID ENGINE", "AS-BUILT", "CHANGE ORDER", "SUB SCOPE", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
 
 // ── Default prices — contractor overrides these in PRICE BOOK ────────
 const DEFAULT_PRICES = {
@@ -1222,61 +1222,41 @@ Our Company: ${brand.companyName || "Not specified"}`;
       </div>
 
       {/* Address Bar */}
-      {/* Address Bar with Autocomplete */}
-      <div className="address-bar" style={{ background: "#111", padding: "12px 24px", borderBottom: "1px solid #1e1e1e", position: "relative", zIndex: 100 }}>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <input
-              style={{ ...inputStyle, fontSize: "14px", padding: "10px 14px" }}
-              placeholder="ENTER JOB SITE ADDRESS..."
-              value={address}
-              onChange={e => {
-                const val = e.target.value;
-                setAddress(val);
-                setMapLoaded(false);
-                clearTimeout(addressDebounce.current);
-                addressDebounce.current = setTimeout(() => fetchSuggestions(val), 350);
-              }}
-              onKeyDown={e => {
-                if (e.key === "Enter" && address) { setShowSuggestions(false); setMapLoaded(true); }
-                if (e.key === "Escape") setShowSuggestions(false);
-              }}
-              onFocus={() => suggestions.length && setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              autoComplete="off"
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <div ref={suggestionsRef} style={{
-                position: "absolute", top: "100%", left: 0, right: 0,
-                background: "#1a1a1a", border: "1px solid #f5a623", borderTop: "none",
-                zIndex: 200, maxHeight: "220px", overflowY: "auto",
-              }}>
-                {suggestions.map((s, i) => (
-                  <div key={i}
-                    onMouseDown={() => {
-                      setAddress(s);
-                      setSuggestions([]);
-                      setShowSuggestions(false);
-                      setMapLoaded(true);
-                    }}
-                    style={{
-                      padding: "10px 14px", fontSize: "12px", color: "#c8bfa8",
-                      fontFamily: "'Courier New', monospace", cursor: "pointer",
-                      borderBottom: "1px solid #2a2a2a", letterSpacing: "0.3px",
-                      lineHeight: "1.4",
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                  >
-                    📍 {s}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <button onClick={() => { setShowSuggestions(false); address && setMapLoaded(true); }} style={{ background: "#f5a623", color: "#000", border: "none", padding: "10px 20px", fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "2px", fontWeight: "bold", cursor: "pointer", whiteSpace: "nowrap" }}>
-            LOAD SITE ▶
-          </button>
+      <div className="address-bar" style={{ background: "#111", padding: "10px 24px", borderBottom: "1px solid #1e1e1e", position: "relative", zIndex: 100 }}>
+        <div style={{ position: "relative" }}>
+          <input
+            style={{ ...inputStyle, fontSize: "14px", padding: "10px 14px" }}
+            placeholder="ENTER JOB SITE ADDRESS..."
+            value={address}
+            onChange={e => {
+              const val = e.target.value;
+              setAddress(val);
+              clearTimeout(addressDebounce.current);
+              addressDebounce.current = setTimeout(() => fetchSuggestions(val), 350);
+            }}
+            onKeyDown={e => { if (e.key === "Escape") setShowSuggestions(false); }}
+            onFocus={() => suggestions.length && setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            autoComplete="off"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <div ref={suggestionsRef} style={{
+              position: "absolute", top: "100%", left: 0, right: 0,
+              background: "#1a1a1a", border: "1px solid #f5a623", borderTop: "none",
+              zIndex: 200, maxHeight: "220px", overflowY: "auto",
+            }}>
+              {suggestions.map((s, i) => (
+                <div key={i}
+                  onMouseDown={() => { setAddress(s); setSuggestions([]); setShowSuggestions(false); }}
+                  style={{ padding: "10px 14px", fontSize: "12px", color: "#c8bfa8", fontFamily: "'Courier New', monospace", cursor: "pointer", borderBottom: "1px solid #2a2a2a", lineHeight: "1.4" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  📍 {s}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1301,25 +1281,45 @@ Our Company: ${brand.companyName || "Not specified"}`;
           {/* PHASE 0: Site Intel */}
           {phase === 0 && (
             <>
-              <SectionLabel>SITE OVERVIEW</SectionLabel>
-              {mapLoaded && address ? (
-                <div style={{ background: "#111", border: "1px solid #2a2a2a", padding: "12px", marginBottom: "16px" }}>
-                  <div style={labelStyle}>SITE ADDRESS</div>
-                  <div style={{ color: "#fff", fontSize: "13px", marginBottom: "8px" }}>{address}</div>
-                  <div style={{ fontSize: "10px", color: "#666", letterSpacing: "1px" }}>→ Map loaded. Switch to BID ENGINE to estimate.</div>
-                </div>
-              ) : (
-                <div style={{ color: "#444", fontSize: "12px", letterSpacing: "1px", textAlign: "center", padding: "40px 0" }}>
-                  ENTER ADDRESS ABOVE<br />TO LOAD SITE MAP
-                </div>
-              )}
-              <SectionLabel>WORKFLOW</SectionLabel>
-              <div style={{ color: "#666", fontSize: "11px", lineHeight: "1.8", letterSpacing: "0.5px" }}>
-                <div style={{ marginBottom: "8px" }}>① Enter job site address → Load satellite map</div>
-                <div style={{ marginBottom: "8px" }}>② BID ENGINE → Fill scope → Generate bid + markup</div>
-                <div style={{ marginBottom: "8px" }}>③ AS-BUILT → Upload iPhone site photos → Field report</div>
-                <div style={{ marginBottom: "8px" }}>④ JOB HISTORY → Save, load, or delete past bids</div>
-              </div>
+              <SectionLabel>QUICK STATS</SectionLabel>
+              {(() => {
+                const totalJobs = jobs.length;
+                const uniqueProjects = new Set(jobs.map(j => j.projectKey || j.id)).size;
+                const totalBidValue = jobs.reduce((sum, j) => {
+                  const match = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                  return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
+                }, 0);
+                const avgBid = uniqueProjects > 0 ? totalBidValue / uniqueProjects : 0;
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+                    {[
+                      { label: "TOTAL BIDS", value: totalJobs, color: "#f5a623" },
+                      { label: "PROJECTS", value: uniqueProjects, color: "#2196f3" },
+                      { label: "TOTAL BID VALUE", value: `$${totalBidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#4caf50" },
+                      { label: "AVG BID SIZE", value: avgBid > 0 ? `$${avgBid.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", color: "#9c27b0" },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{ background: "#111", border: `1px solid ${color}22`, padding: "10px 12px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>{label}</div>
+                        <div style={{ fontSize: "16px", fontWeight: "bold", color }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              <SectionLabel>QUICK ACTIONS</SectionLabel>
+              {[
+                { label: "▶ NEW BID", action: () => setPhase(1), color: "#f5a623", bg: "#1a1400" },
+                { label: "📋 CHANGE ORDER", action: () => setPhase(3), color: "#e53935", bg: "#1a0d0d" },
+                { label: "📄 SCOPE LETTER", action: () => setPhase(4), color: "#9c27b0", bg: "#1a0d1a" },
+                { label: "📷 SITE PHOTOS", action: () => setPhase(2), color: "#4caf50", bg: "#0d1a0d" },
+              ].map(({ label, action, color, bg }) => (
+                <button key={label} onClick={action} style={{
+                  width: "100%", background: bg, color, border: `1px solid ${color}44`,
+                  padding: "12px", fontFamily: "'Courier New', monospace", fontSize: "11px",
+                  letterSpacing: "2px", cursor: "pointer", marginBottom: "6px", textAlign: "left",
+                }}>{label}</button>
+              ))}
             </>
           )}
 
@@ -1877,15 +1877,73 @@ Our Company: ${brand.companyName || "Not specified"}`;
 
           {phase === 0 && (
             <>
-              <SectionLabel>SITE MAP VIEW</SectionLabel>
-              {mapLoaded && address ? (
-                <LeafletMap address={address} />
-              ) : (
-                <div style={{ height: "500px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
-                  <div style={{ fontSize: "40px", marginBottom: "12px" }}>🗺</div>
-                  <div style={{ fontSize: "11px", letterSpacing: "3px" }}>AWAITING ADDRESS INPUT</div>
+              <SectionLabel>ACTIVE JOBS</SectionLabel>
+              {jobs.length === 0 ? (
+                <div style={{ height: "300px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
+                  <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏗</div>
+                  <div style={{ fontSize: "11px", letterSpacing: "2px", marginBottom: "8px" }}>NO JOBS YET</div>
+                  <button onClick={() => setPhase(1)} style={{ background: "#f5a623", color: "#000", border: "none", padding: "10px 20px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", marginTop: "12px" }}>
+                    ▶ CREATE FIRST BID
+                  </button>
                 </div>
-              )}
+              ) : (() => {
+                // Group by project key, show latest revision per project
+                const grouped = {};
+                jobs.forEach(job => {
+                  const key = job.projectKey || `legacy_${job.id}`;
+                  if (!grouped[key] || (job.version || 1) > (grouped[key].version || 1)) {
+                    grouped[key] = job;
+                  }
+                });
+                const projectList = Object.values(grouped).sort((a, b) => b.id - a.id);
+                const allRevisions = jobs;
+
+                return (
+                  <div>
+                    {projectList.map(job => {
+                      const match = job.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                      const bidValue = match ? parseFloat(match[1].replace(/,/g, "")) : null;
+                      const revCount = allRevisions.filter(j => (j.projectKey || `legacy_${j.id}`) === (job.projectKey || `legacy_${job.id}`)).length;
+
+                      return (
+                        <div key={job.id} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", marginBottom: "10px", padding: "14px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ color: "#f0ece0", fontSize: "14px", fontWeight: "bold", marginBottom: "2px" }}>
+                                {job.jobInfo?.projectName || job.address || "Unnamed Project"}
+                              </div>
+                              {job.jobInfo?.projectName && <div style={{ color: "#666", fontSize: "10px", marginBottom: "4px" }}>{job.address}</div>}
+                              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                                {job.jobInfo?.clientName && <span style={{ fontSize: "10px", color: "#888" }}>Client: {job.jobInfo.clientName}</span>}
+                                {job.jobInfo?.gcName && <span style={{ fontSize: "10px", color: "#888" }}>GC: {job.jobInfo.gcName}</span>}
+                              </div>
+                            </div>
+                            <button onClick={() => { loadJob(job); }} style={{
+                              background: "#f5a623", color: "#000", border: "none", padding: "6px 14px",
+                              fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer", flexShrink: 0, marginLeft: "10px",
+                            }}>LOAD</button>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "6px" }}>
+                            {[
+                              { l: "TOTAL BID", v: bidValue ? `$${bidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", c: "#4caf50" },
+                              { l: "POUR TYPE", v: job.bidForm?.pourType || "—", c: "#888" },
+                              { l: "SQUARE FT", v: job.bidForm?.sqft ? `${job.bidForm.sqft} SF` : "—", c: "#888" },
+                              { l: "REVISIONS", v: `v${job.version || 1} (${revCount})`, c: revCount > 1 ? "#f5a623" : "#555" },
+                            ].map(({ l, v, c }) => (
+                              <div key={l} style={{ background: "#111", padding: "6px 8px" }}>
+                                <div style={{ fontSize: "7px", letterSpacing: "1px", color: "#444", marginBottom: "3px" }}>{l}</div>
+                                <div style={{ fontSize: "11px", color: c, fontWeight: l === "TOTAL BID" ? "bold" : "normal" }}>{v}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: "9px", color: "#444", marginTop: "8px", letterSpacing: "0.5px" }}>Last updated: {job.savedAt}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </>
           )}
 
