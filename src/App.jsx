@@ -385,64 +385,199 @@ function JobHistoryPanel({ jobs, onLoad, onDelete, onStatusChange }) {
 // ── PDF Export (Blob download — no popup blocker) ──────────────────
 function exportToPDF(address, bidForm, bidOutput, brand = {}, jobInfo = {}) {
   const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const filename = `BidEstimate_${(address || "JobSite").replace(/[^a-z0-9]/gi, "_").slice(0, 30)}_${new Date().toISOString().slice(0,10)}.html`;
-  const coName = brand.companyName || "CONCRETE SITE INTELLIGENCE";
-  const coSub = brand.companyName ? "FIELD OPS PLATFORM" : "BID ESTIMATE — CONFIDENTIAL";
+  const expiryDate = jobInfo.bidExpiry || (() => {
+    const d = new Date(); d.setDate(d.getDate() + 30);
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  })();
+  const filename = `BidProposal_${(jobInfo.projectName || address || "Project").replace(/[^a-z0-9]/gi, "_").slice(0, 30)}_${new Date().toISOString().slice(0,10)}.html`;
+  const coName = brand.companyName || "CONCRETE CONTRACTOR";
+  const bidNumber = jobInfo.bidNumber || `BID-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>BID ESTIMATE — ${coName}</title>
+  // Parse total bid value from output
+  const totalMatch = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+  const totalBid = totalMatch ? `$${totalMatch[1]}` : "See estimate below";
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BID PROPOSAL — ${coName}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; background: #fff; color: #111; padding: 48px; max-width: 900px; margin: 0 auto; }
-  .header { border-bottom: 3px solid #f5a623; padding-bottom: 20px; margin-bottom: 28px; display: flex; justify-content: space-between; align-items: flex-end; }
-  .co-name { font-size: 22px; font-weight: bold; letter-spacing: 2px; }
-  .co-sub { font-size: 10px; letter-spacing: 3px; color: #f5a623; margin-top: 4px; }
-  .co-meta { font-size: 11px; color: #888; margin-top: 2px; }
-  .doc-date { font-size: 11px; color: #888; letter-spacing: 1px; text-align: right; }
-  .contact-block { font-size: 10px; color: #888; text-align: right; line-height: 1.7; margin-top: 4px; }
-  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 28px; background: #f9f9f9; padding: 16px; border-left: 4px solid #f5a623; }
-  .meta-item label { font-size: 8px; letter-spacing: 2px; color: #888; display: block; margin-bottom: 4px; text-transform: uppercase; }
-  .meta-item span { font-size: 12px; font-weight: bold; }
-  .output { white-space: pre-wrap; line-height: 1.9; font-size: 12px; border-top: 1px solid #eee; padding-top: 24px; }
-  .footer { margin-top: 48px; border-top: 1px solid #ddd; padding-top: 16px; font-size: 9px; color: #aaa; letter-spacing: 1px; display: flex; justify-content: space-between; }
-  @media print { body { padding: 24px; } @page { margin: 1in; } }
-</style></head><body>
-<div class="header">
+  body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #222; font-size: 11pt; }
+
+  /* COVER HEADER */
+  .cover-header {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 40px 48px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .co-name { font-size: 24px; font-weight: bold; letter-spacing: 1px; color: #fff; margin-bottom: 4px; }
+  .co-tagline { font-size: 11px; color: #f5a623; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .co-contact { font-size: 10px; color: #aaa; line-height: 1.8; }
+  .co-lic { font-size: 10px; color: #888; margin-top: 6px; }
+  .doc-info { text-align: right; }
+  .doc-title { font-size: 13px; font-weight: bold; color: #f5a623; letter-spacing: 2px; margin-bottom: 6px; }
+  .doc-number { font-size: 11px; color: #aaa; margin-bottom: 4px; }
+  .doc-date { font-size: 11px; color: #aaa; }
+
+  /* AMBER ACCENT BAR */
+  .accent-bar { height: 4px; background: #f5a623; }
+
+  /* BODY */
+  .body { padding: 40px 48px; }
+
+  /* TO/FROM BLOCK */
+  .to-from { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #eee; }
+  .to-from-block label { font-size: 8px; letter-spacing: 3px; color: #f5a623; display: block; margin-bottom: 8px; text-transform: uppercase; font-weight: bold; }
+  .to-from-block .name { font-size: 13px; font-weight: bold; color: #222; margin-bottom: 2px; }
+  .to-from-block .sub { font-size: 11px; color: #666; line-height: 1.6; }
+
+  /* PROJECT SUMMARY BOX */
+  .project-box { background: #f8f8f8; border: 1px solid #e0e0e0; border-left: 4px solid #f5a623; padding: 20px 24px; margin-bottom: 28px; }
+  .project-box h3 { font-size: 9px; letter-spacing: 3px; color: #f5a623; text-transform: uppercase; margin-bottom: 14px; }
+  .project-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .project-item label { font-size: 8px; letter-spacing: 1px; color: #999; display: block; margin-bottom: 3px; text-transform: uppercase; }
+  .project-item span { font-size: 12px; font-weight: bold; color: #222; }
+
+  /* TOTAL BID CALLOUT */
+  .bid-callout { background: #1a1a1a; color: #f5a623; padding: 16px 24px; margin-bottom: 28px; display: flex; justify-content: space-between; align-items: center; }
+  .bid-callout .label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: #888; }
+  .bid-callout .amount { font-size: 28px; font-weight: bold; }
+
+  /* ESTIMATE DETAIL */
+  .section-title { font-size: 9px; letter-spacing: 3px; color: #f5a623; text-transform: uppercase; font-weight: bold; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #f5a62333; }
+  .estimate-body { font-family: 'Courier New', monospace; font-size: 10pt; white-space: pre-wrap; line-height: 1.8; color: #333; margin-bottom: 32px; background: #f8f8f8; padding: 20px; border: 1px solid #eee; }
+
+  /* TERMS */
+  .terms { margin-bottom: 32px; }
+  .terms p { font-size: 10px; color: #666; line-height: 1.7; margin-bottom: 6px; }
+  .terms strong { color: #333; }
+
+  /* SIGNATURE BLOCK */
+  .signature-block { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 40px; padding-top: 24px; border-top: 1px solid #eee; }
+  .sig-party label { font-size: 8px; letter-spacing: 2px; color: #999; display: block; margin-bottom: 40px; text-transform: uppercase; }
+  .sig-line { border-bottom: 1px solid #333; margin-bottom: 6px; height: 1px; }
+  .sig-name { font-size: 10px; color: #666; }
+  .sig-title { font-size: 9px; color: #999; margin-top: 2px; }
+
+  /* FOOTER */
+  .footer { background: #f0f0f0; padding: 12px 48px; display: flex; justify-content: space-between; font-size: 8px; color: #999; letter-spacing: 1px; text-transform: uppercase; margin-top: 40px; }
+
+  @media print { @page { margin: 0.75in; } body { font-size: 10pt; } .cover-header { padding: 32px; } .body { padding: 32px; } }
+</style>
+</head>
+<body>
+
+<!-- COVER HEADER -->
+<div class="cover-header">
   <div>
     <div class="co-name">${coName.toUpperCase()}</div>
-    <div class="co-sub">${coSub.toUpperCase()}</div>
-    ${brand.licenseNumber ? `<div class="co-meta">LIC# ${brand.licenseNumber}</div>` : ""}
-    ${brand.tagline ? `<div class="co-meta" style="color:#999;font-style:italic">${brand.tagline}</div>` : ""}
+    <div class="co-tagline">${brand.tagline || "Concrete Contractor"}</div>
+    <div class="co-contact">
+      ${brand.phone ? `<div>${brand.phone}</div>` : ""}
+      ${brand.email ? `<div>${brand.email}</div>` : ""}
+      ${brand.city && brand.state ? `<div>${brand.city}, ${brand.state}</div>` : ""}
+      ${brand.website ? `<div>${brand.website}</div>` : ""}
+    </div>
+    ${brand.licenseNumber ? `<div class="co-lic">License #${brand.licenseNumber}</div>` : ""}
   </div>
-  <div>
-    <div class="doc-date">${date}</div>
-    <div class="contact-block">
-      ${brand.phone ? `${brand.phone}<br/>` : ""}
-      ${brand.email ? `${brand.email}<br/>` : ""}
-      ${brand.city && brand.state ? `${brand.city}, ${brand.state}<br/>` : ""}
-      ${brand.website ? `${brand.website}` : ""}
+  <div class="doc-info">
+    <div class="doc-title">BID PROPOSAL</div>
+    <div class="doc-number">${bidNumber}</div>
+    <div class="doc-date">Date: ${date}</div>
+    <div class="doc-date" style="color:#f5a623;margin-top:4px;">Valid Until: ${expiryDate}</div>
+  </div>
+</div>
+<div class="accent-bar"></div>
+
+<div class="body">
+
+  <!-- TO / FROM -->
+  <div class="to-from">
+    <div class="to-from-block">
+      <label>Submitted To</label>
+      <div class="name">${jobInfo.clientName || jobInfo.gcName || "___________________________"}</div>
+      ${jobInfo.gcName && jobInfo.clientName ? `<div class="sub">GC: ${jobInfo.gcName}</div>` : ""}
+      ${jobInfo.poNumber ? `<div class="sub">PO / Contract #: ${jobInfo.poNumber}</div>` : ""}
+    </div>
+    <div class="to-from-block">
+      <label>Submitted By</label>
+      <div class="name">${coName}</div>
+      <div class="sub">${brand.phone || ""}${brand.phone && brand.email ? " · " : ""}${brand.email || ""}</div>
+      ${brand.licenseNumber ? `<div class="sub">License #${brand.licenseNumber}</div>` : ""}
     </div>
   </div>
+
+  <!-- PROJECT SUMMARY -->
+  <div class="project-box">
+    <h3>Project Information</h3>
+    <div class="project-grid">
+      <div class="project-item"><label>Project Name</label><span>${jobInfo.projectName || "—"}</span></div>
+      <div class="project-item"><label>Job Site Address</label><span>${address || "—"}</span></div>
+      <div class="project-item"><label>Pour Type</label><span>${bidForm.pourType || "—"}</span></div>
+      <div class="project-item"><label>Area</label><span>${bidForm.sqft ? bidForm.sqft + " SF" : "—"}</span></div>
+      <div class="project-item"><label>Thickness</label><span>${bidForm.thickness ? bidForm.thickness + '"' : "—"}</span></div>
+      <div class="project-item"><label>Concrete Strength</label><span>${bidForm.psi ? bidForm.psi + " PSI" : "—"}</span></div>
+      <div class="project-item"><label>Finish Type</label><span>${bidForm.finishType || "—"}</span></div>
+      <div class="project-item"><label>Bid Number</label><span>${bidNumber}</span></div>
+      <div class="project-item"><label>Valid Until</label><span>${expiryDate}</span></div>
+    </div>
+  </div>
+
+  <!-- TOTAL BID CALLOUT -->
+  <div class="bid-callout">
+    <div>
+      <div class="label">Total Bid Price</div>
+      <div style="font-size:10px;color:#666;margin-top:2px;">All materials, labor, and equipment included</div>
+    </div>
+    <div class="amount">${totalBid}</div>
+  </div>
+
+  <!-- DETAILED ESTIMATE -->
+  <div class="section-title">Detailed Estimate</div>
+  <div class="estimate-body">${(bidOutput || "No estimate generated.").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+
+  <!-- TERMS -->
+  <div class="terms">
+    <div class="section-title">Terms &amp; Conditions</div>
+    <p><strong>Validity:</strong> This proposal is valid for 30 days from the date above. Pricing is subject to change after the expiration date.</p>
+    <p><strong>Scope:</strong> This bid covers the concrete scope described above only. Any additional work, changes in scope, or unforeseen conditions will be addressed via written change order prior to execution.</p>
+    <p><strong>Payment:</strong> Payment terms to be agreed upon contract execution. Standard terms are net 30 days from invoice date.</p>
+    <p><strong>Exclusions:</strong> Permits, inspections, soil testing, underground utility locates, and survey work are excluded unless explicitly listed above.</p>
+    <p><strong>Acceptance:</strong> This proposal becomes a binding agreement upon signature by both parties.</p>
+  </div>
+
+  <!-- SIGNATURE BLOCK -->
+  <div class="signature-block">
+    <div class="sig-party">
+      <label>Contractor Acceptance</label>
+      <div class="sig-line"></div>
+      <div class="sig-name">${coName}</div>
+      <div class="sig-title">Authorized Representative &nbsp;&nbsp;&nbsp; Date: ___________</div>
+    </div>
+    <div class="sig-party">
+      <label>Client / GC Acceptance</label>
+      <div class="sig-line"></div>
+      <div class="sig-name">${jobInfo.clientName || jobInfo.gcName || "Client / General Contractor"}</div>
+      <div class="sig-title">Authorized Representative &nbsp;&nbsp;&nbsp; Date: ___________</div>
+    </div>
+  </div>
+
 </div>
-<div class="meta">
-  <div class="meta-item"><label>Job Site Address</label><span>${address || "Not specified"}</span></div>
-  <div class="meta-item"><label>Pour Type</label><span>${bidForm.pourType || "-"}</span></div>
-  <div class="meta-item"><label>Square Footage</label><span>${bidForm.sqft || "-"} SF</span></div>
-  <div class="meta-item"><label>Thickness</label><span>${bidForm.thickness || "-"}"</span></div>
-  <div class="meta-item"><label>Concrete Strength</label><span>${bidForm.psi || "-"} PSI</span></div>
-  <div class="meta-item"><label>Finish Type</label><span>${bidForm.finishType || "-"}</span></div>
-  ${jobInfo.projectName ? `<div class="meta-item"><label>Project Name</label><span>${jobInfo.projectName}</span></div>` : ""}
-  ${jobInfo.clientName ? `<div class="meta-item"><label>Client</label><span>${jobInfo.clientName}</span></div>` : ""}
-  ${jobInfo.gcName ? `<div class="meta-item"><label>General Contractor</label><span>${jobInfo.gcName}</span></div>` : ""}
-  ${jobInfo.bidNumber ? `<div class="meta-item"><label>Bid Number</label><span>${jobInfo.bidNumber}</span></div>` : ""}
-  ${jobInfo.poNumber ? `<div class="meta-item"><label>PO / Contract #</label><span>${jobInfo.poNumber}</span></div>` : ""}
-  ${jobInfo.bidExpiry ? `<div class="meta-item"><label>Bid Expiry</label><span>${jobInfo.bidExpiry}</span></div>` : ""}
-</div>
-<div class="output">${(bidOutput || "No bid generated.").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+
+<!-- FOOTER -->
 <div class="footer">
-  <span>${coName.toUpperCase()}${brand.licenseNumber ? ` — LIC# ${brand.licenseNumber}` : ""}</span>
-  <span>VERIFY ALL FIGURES WITH LOCAL SUPPLIER QUOTES BEFORE SUBMITTING</span>
+  <span>${coName}${brand.licenseNumber ? ` · License #${brand.licenseNumber}` : ""}</span>
+  <span>${bidNumber} · ${date}</span>
+  <span>Verify all quantities before ordering</span>
 </div>
-</body></html>`;
+
+</body>
+</html>`;
 
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
