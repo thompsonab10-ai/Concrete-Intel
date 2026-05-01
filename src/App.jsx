@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
-const PHASES = ["DASHBOARD", "BID ENGINE", "AS-BUILT", "CHANGE ORDER", "SUB SCOPE", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
+const PHASES = ["DASHBOARD", "BID ENGINE", "CHANGE ORDER", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
 
 // ── Default prices — contractor overrides these in PRICE BOOK ────────
 const DEFAULT_PRICES = {
@@ -1655,9 +1655,9 @@ Our Company: ${brand.companyName || "Not specified"}`;
               <SectionLabel>QUICK ACTIONS</SectionLabel>
               {[
                 { label: "▶ NEW BID", action: () => setPhase(1), color: "#f5a623", bg: "#1a1400" },
-                { label: "📋 CHANGE ORDER", action: () => setPhase(3), color: "#e53935", bg: "#1a0d0d" },
-                { label: "📄 SCOPE LETTER", action: () => setPhase(4), color: "#9c27b0", bg: "#1a0d1a" },
-                { label: "📷 SITE PHOTOS", action: () => setPhase(2), color: "#4caf50", bg: "#0d1a0d" },
+                { label: "📋 CHANGE ORDER", action: () => setPhase(2), color: "#e53935", bg: "#1a0d0d" },
+                { label: "📂 JOB HISTORY", action: () => setPhase(3), color: "#2196f3", bg: "#0d0d1a" },
+                { label: "💲 PRICE BOOK", action: () => setPhase(4), color: "#4caf50", bg: "#0d1a0d" },
               ].map(({ label, action, color, bg }) => (
                 <button key={label} onClick={action} style={{
                   width: "100%", background: bg, color, border: `1px solid ${color}44`,
@@ -1812,68 +1812,8 @@ Our Company: ${brand.companyName || "Not specified"}`;
           )}
 
           {/* PHASE 2: As-Built */}
+          {/* PHASE 2: Change Order */}
           {phase === 2 && (
-            <>
-              <SectionLabel>SITE PHOTO UPLOAD</SectionLabel>
-
-              {/* Upload zone */}
-              <div onClick={() => fileRef.current?.click()} style={{
-                border: "2px dashed #333", padding: "24px", textAlign: "center", cursor: "pointer",
-                marginBottom: "12px", background: sitePhotos.length ? "#0d1a0d" : "#0d0d0d",
-                borderColor: sitePhotos.length ? "#4caf50" : "#333",
-              }}>
-                <div style={{ fontSize: "28px", marginBottom: "8px" }}>📷</div>
-                <div style={{ fontSize: "11px", letterSpacing: "2px", color: sitePhotos.length ? "#4caf50" : "#555" }}>
-                  {sitePhotos.length ? `${sitePhotos.length} PHOTO${sitePhotos.length > 1 ? "S" : ""} LOADED` : "TAP TO ADD SITE PHOTOS"}
-                </div>
-                <div style={{ fontSize: "10px", color: "#444", marginTop: "6px" }}>JPG · PNG · HEIC — UP TO 8 PHOTOS</div>
-                <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoUpload} />
-              </div>
-
-              {/* Photo thumbnails */}
-              {sitePhotos.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px", marginBottom: "12px" }}>
-                  {sitePhotos.map((p, i) => (
-                    <div key={i} style={{ position: "relative" }}>
-                      <img src={p.preview} alt={p.name} style={{ width: "100%", height: "70px", objectFit: "cover", border: "1px solid #2a2a2a" }} />
-                      <button onClick={() => setSitePhotos(prev => prev.filter((_, j) => j !== i))} style={{
-                        position: "absolute", top: "2px", right: "2px", background: "#e53935cc", color: "#fff",
-                        border: "none", width: "18px", height: "18px", fontSize: "10px", lineHeight: "18px",
-                        textAlign: "center", cursor: "pointer", padding: 0,
-                      }}>✕</button>
-                    </div>
-                  ))}
-                  {sitePhotos.length < 8 && (
-                    <div onClick={() => fileRef.current?.click()} style={{ height: "70px", border: "1px dashed #333", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#444", fontSize: "20px" }}>+</div>
-                  )}
-                </div>
-              )}
-
-              <div style={{ background: "#111", border: "1px solid #2a2a2a", padding: "10px 12px", marginBottom: "12px" }}>
-                {["Scope summary from photos", "Progress % by trade", "Observed site conditions", "Punch list items", "Inspection readiness", "Quality / safety flags", "Closeout docs needed"].map(item => (
-                  <div key={item} style={{ fontSize: "10px", color: "#888", marginBottom: "3px" }}>→ {item}</div>
-                ))}
-              </div>
-
-              <button onClick={runAsBuilt} disabled={!sitePhotos.length || asBuiltStatus.type === "loading"} style={{
-                width: "100%", background: sitePhotos.length ? "#f5a623" : "#2a2a2a", color: sitePhotos.length ? "#000" : "#555",
-                border: "none", padding: "13px", fontFamily: "'Courier New', monospace", fontSize: "11px",
-                letterSpacing: "3px", fontWeight: "bold", cursor: sitePhotos.length ? "pointer" : "not-allowed", marginBottom: "8px",
-              }}>
-                {asBuiltStatus.type === "loading" ? `◌ ANALYZING ${sitePhotos.length} PHOTO${sitePhotos.length > 1 ? "S" : ""}...` : "▶ ANALYZE SITE PHOTOS"}
-              </button>
-
-              {asBuiltOutput && (
-                <button onClick={() => { setAsBuiltOutput(""); setSitePhotos([]); setAsBuiltStatus({ text: "NO PHOTOS LOADED", type: "idle" }); }} style={{
-                  width: "100%", background: "transparent", color: "#555", border: "1px solid #333",
-                  padding: "8px", fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "2px", cursor: "pointer",
-                }}>↺ CLEAR & START NEW REPORT</button>
-              )}
-            </>
-          )}
-
-          {/* PHASE 3: Change Order */}
-          {phase === 3 && (
             <>
               <SectionLabel>CHANGE ORDER DETAILS</SectionLabel>
 
@@ -2059,84 +1999,8 @@ Our Company: ${brand.companyName || "Not specified"}`;
           )}
 
           {/* PHASE 4: Sub Scope */}
-          {phase === 4 && (
-            <>
-              <SectionLabel>SUBCONTRACTOR SCOPE LETTER</SectionLabel>
-              <div style={{ background: "#111", border: "1px solid #9c27b033", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", lineHeight: "1.7" }}>
-                Generate a formal scope of work letter to send to a subcontractor for pricing.
-              </div>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>SUB COMPANY NAME</label>
-                <input style={inputStyle} placeholder="ABC Rebar LLC" value={scopeForm.subName} onChange={e => setScopeForm({ ...scopeForm, subName: e.target.value })} />
-              </div>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>TRADE</label>
-                <select style={inputStyle} value={scopeForm.subTrade} onChange={e => setScopeForm({ ...scopeForm, subTrade: e.target.value })}>
-                  {["Concrete", "Rebar / Reinforcing", "Formwork", "Excavation", "Waterproofing", "Surveying", "Soil Testing", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>PROJECT NAME</label>
-                <input style={inputStyle} placeholder={jobInfo.projectName || "Project name"} value={scopeForm.projectName} onChange={e => setScopeForm({ ...scopeForm, projectName: e.target.value })} />
-              </div>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>PROJECT ADDRESS</label>
-                <input style={inputStyle} placeholder={address || "Job site address"} value={scopeForm.projectAddress} onChange={e => setScopeForm({ ...scopeForm, projectAddress: e.target.value })} />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                <div>
-                  <label style={{ ...labelStyle, color: "#9c27b0" }}>BID DUE DATE</label>
-                  <input style={inputStyle} type="date" value={scopeForm.bidDueDate} onChange={e => setScopeForm({ ...scopeForm, bidDueDate: e.target.value })} />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, color: "#9c27b0" }}>WORK START DATE</label>
-                  <input style={inputStyle} type="date" value={scopeForm.workStartDate} onChange={e => setScopeForm({ ...scopeForm, workStartDate: e.target.value })} />
-                </div>
-              </div>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>SCOPE DESCRIPTION *</label>
-                <textarea style={{ ...inputStyle, height: "80px", resize: "vertical" }}
-                  placeholder="Describe the work required — e.g. Furnish and install all rebar for 2,400 SF slab on grade, 4' thick, per structural drawings..."
-                  value={scopeForm.scopeDescription}
-                  onChange={e => setScopeForm({ ...scopeForm, scopeDescription: e.target.value })} />
-              </div>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>INCLUSIONS</label>
-                <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }}
-                  placeholder="What IS included — materials, labor, equipment..."
-                  value={scopeForm.inclusions}
-                  onChange={e => setScopeForm({ ...scopeForm, inclusions: e.target.value })} />
-              </div>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>EXCLUSIONS</label>
-                <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }}
-                  placeholder="What is NOT included — permits, testing, etc..."
-                  value={scopeForm.exclusions}
-                  onChange={e => setScopeForm({ ...scopeForm, exclusions: e.target.value })} />
-              </div>
-              <div style={{ marginBottom: "14px" }}>
-                <label style={{ ...labelStyle, color: "#9c27b0" }}>SPECIAL REQUIREMENTS</label>
-                <input style={inputStyle} placeholder="Safety requirements, scheduling constraints..."
-                  value={scopeForm.specialRequirements}
-                  onChange={e => setScopeForm({ ...scopeForm, specialRequirements: e.target.value })} />
-              </div>
-
-              <button onClick={runSubScope} disabled={!scopeForm.scopeDescription || scopeStatus.type === "loading"} style={{
-                width: "100%",
-                background: scopeForm.scopeDescription ? "#9c27b0" : "#2a2a2a",
-                color: scopeForm.scopeDescription ? "#fff" : "#555",
-                border: "none", padding: "13px", fontFamily: "'Courier New', monospace",
-                fontSize: "11px", letterSpacing: "3px", fontWeight: "bold",
-                cursor: scopeForm.scopeDescription ? "pointer" : "not-allowed",
-              }}>
-                {scopeStatus.type === "loading" ? "◌ GENERATING..." : "▶ GENERATE SCOPE LETTER"}
-              </button>
-            </>
-          )}
-
-          {/* PHASE 5: Job History Controls */}
-          {phase === 5 && (
+          {/* PHASE 3: Job History Controls */}
+          {phase === 3 && (
             <>
               <SectionLabel>JOB HISTORY</SectionLabel>
               <div style={{ background: "#111", border: "1px solid #2a2a2a", padding: "10px 12px", marginBottom: "12px", fontSize: "11px" }}>
@@ -2152,7 +2016,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
           )}
 
           {/* PHASE 5: Price Book */}
-          {phase === 6 && (
+          {phase === 4 && (
             <>
               <SectionLabel>PRICE BOOK</SectionLabel>
               <div style={{ background: "#111", border: "1px solid #2196f333", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", lineHeight: "1.7" }}>
@@ -2210,7 +2074,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
           )}
 
           {/* PHASE 6: Settings */}
-          {phase === 7 && (
+          {phase === 5 && (
             <>
               <SectionLabel>COMPANY BRANDING</SectionLabel>
               <div style={{ color: "#666", fontSize: "10px", letterSpacing: "1px", marginBottom: "16px", lineHeight: "1.7" }}>
@@ -2497,7 +2361,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
             </>
           )}
 
-          {phase === 3 && (
+          {phase === 2 && (
             <>
               <SectionLabel>CHANGE ORDER OUTPUT</SectionLabel>
               <StatusBar text={coStatus.text} type={coStatus.type} />
@@ -2534,51 +2398,14 @@ Our Company: ${brand.companyName || "Not specified"}`;
             </>
           )}
 
-          {phase === 4 && (
-            <>
-              <SectionLabel>SCOPE OF WORK LETTER</SectionLabel>
-              <StatusBar text={scopeStatus.text} type={scopeStatus.type} />
-
-              {/* Context banner if job info populated */}
-              {(scopeForm.projectName || scopeForm.subName) && (
-                <div style={{ background: "#111", border: "1px solid #9c27b033", borderLeft: "3px solid #9c27b0", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
-                  {scopeForm.subName && <div style={{ color: "#f0ece0", marginBottom: "2px" }}>To: {scopeForm.subName}</div>}
-                  {scopeForm.projectName && <div style={{ color: "#888" }}>Project: {scopeForm.projectName}</div>}
-                  {scopeForm.bidDueDate && <div style={{ color: "#888" }}>Bid Due: {scopeForm.bidDueDate}</div>}
-                </div>
-              )}
-
-              {scopeOutput ? (
-                <>
-                  <OutputPanel content={scopeOutput} title="SCOPE OF WORK LETTER — REVIEW BEFORE SENDING" accent="#9c27b0" />
-                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                    <button onClick={exportSubScope} style={{
-                      background: "#1a0d1a", color: "#9c27b0", border: "1px solid #9c27b044",
-                      padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
-                    }}>⬇ EXPORT SCOPE LETTER</button>
-                    <button onClick={() => { setScopeOutput(""); setScopeStatus({ text: "AWAITING INPUT", type: "idle" }); }} style={{
-                      background: "transparent", color: "#555", border: "1px solid #333",
-                      padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
-                    }}>↺ NEW SCOPE</button>
-                  </div>
-                </>
-              ) : (
-                <div style={{ height: "380px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
-                  <div style={{ fontSize: "30px", marginBottom: "12px" }}>📄</div>
-                  <div style={{ fontSize: "11px", letterSpacing: "2px" }}>FILL FORM → GENERATE SCOPE LETTER</div>
-                </div>
-              )}
-            </>
-          )}
-
-          {phase === 5 && (
+          {phase === 3 && (
             <>
               <SectionLabel>SAVED BIDS</SectionLabel>
               <JobHistoryPanel jobs={jobs} onLoad={loadJob} onDelete={deleteJob} onStatusChange={updateJobStatus} />
             </>
           )}
 
-          {phase === 6 && (
+          {phase === 4 && (
             <>
               <SectionLabel>PRICE BOOK EDITOR</SectionLabel>
               <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginBottom: "16px" }}>
@@ -2659,7 +2486,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
             </>
           )}
 
-          {phase === 7 && (
+          {phase === 5 && (
             <>
               <SectionLabel>BRAND PREVIEW</SectionLabel>
               <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: "3px solid #f5a623", padding: "24px" }}>
