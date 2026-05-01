@@ -838,6 +838,9 @@ export default function ConcreteIntelTool() {
   const [brand, setBrand] = useState({
     companyName: "", licenseNumber: "", phone: "", email: "", website: "", city: "", state: "", tagline: "",
   });
+  const [contacts, setContacts] = useState([]);
+  const [newContact, setNewContact] = useState({ name: "", company: "", role: "GC", phone: "", email: "" });
+  const [showContacts, setShowContacts] = useState(false);
 
   const [prices, setPrices] = useState(() => {
     const p = {};
@@ -848,7 +851,7 @@ export default function ConcreteIntelTool() {
   const [editingPriceKey, setEditingPriceKey] = useState(null);
 
   const [jobInfo, setJobInfo] = useState({
-    clientName: "", gcName: "", projectName: "", bidNumber: "", bidExpiry: "", poNumber: "",
+    clientName: "", gcName: "", projectName: "", bidNumber: "", bidExpiry: "", poNumber: "", notes: "",
   });
 
   const [bidForm, setBidForm] = useState({
@@ -914,6 +917,10 @@ export default function ConcreteIntelTool() {
       const res = await window.storage.get("brand:settings");
       if (res?.value) setBrand(JSON.parse(res.value));
     } catch {}
+    try {
+      const res = await window.storage.get("contacts:book");
+      if (res?.value) setContacts(JSON.parse(res.value));
+    } catch {}
   };
 
   const loadPricesFromStorage = async () => {
@@ -939,6 +946,29 @@ export default function ConcreteIntelTool() {
   const saveBrand = async (updated) => {
     try { await window.storage.set("brand:settings", JSON.stringify(updated)); } catch {}
     setBrand(updated);
+  };
+
+  const saveContact = async (contact) => {
+    const updated = [...contacts, { ...contact, id: Date.now() }];
+    try { await window.storage.set("contacts:book", JSON.stringify(updated)); } catch {}
+    setContacts(updated);
+    setNewContact({ name: "", company: "", role: "GC", phone: "", email: "" });
+  };
+
+  const deleteContact = async (id) => {
+    const updated = contacts.filter(c => c.id !== id);
+    try { await window.storage.set("contacts:book", JSON.stringify(updated)); } catch {}
+    setContacts(updated);
+  };
+
+  const applyContact = (contact) => {
+    setJobInfo(prev => ({
+      ...prev,
+      clientName: contact.role === "Client" ? contact.name : prev.clientName,
+      gcName: contact.role === "GC" ? contact.name : prev.gcName,
+    }));
+    setShowContacts(false);
+    setPhase(1);
   };
 
   const fetchSuggestions = async (query) => {
@@ -1018,6 +1048,16 @@ export default function ConcreteIntelTool() {
     if (job.jobInfo) setJobInfo(job.jobInfo);
     setCurrentJobKey(job.projectKey || null);
     setBidStatus({ text: `v${job.version || 1} LOADED FROM HISTORY`, type: "success" });
+    setPhase(1);
+  };
+
+  const quickRebid = (job) => {
+    setAddress(job.address || "");
+    setBidForm({ ...job.bidForm });
+    setBidOutput(""); // clear output so they generate fresh
+    if (job.jobInfo) setJobInfo({ ...job.jobInfo, notes: job.jobInfo.notes || "" });
+    setCurrentJobKey(job.projectKey || null);
+    setBidStatus({ text: `REBID READY — ADJUST SPECS AND GENERATE`, type: "idle" });
     setPhase(1);
   };
 
@@ -1790,6 +1830,23 @@ Our Company: ${brand.companyName || "Not specified"}`;
                 {showJobInfo ? "▲" : "▼"} CLIENT / JOB INFO
               </button>
 
+              {/* Contact quick-select */}
+              {showJobInfo && contacts.length > 0 && (
+                <div style={{ background: "#0d0d0d", border: "1px solid #ff980033", padding: "10px", marginBottom: "10px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#ff9800", marginBottom: "8px" }}>QUICK SELECT FROM CONTACTS</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {contacts.map(c => (
+                      <button key={c.id} onClick={() => applyContact(c)} style={{
+                        background: "#1a1a00", color: "#f5a623", border: "1px solid #f5a62344",
+                        padding: "4px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer",
+                      }}>
+                        {c.name} ({c.role})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {showJobInfo && (
                 <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: "3px solid #ff9800", padding: "14px", marginBottom: "8px" }}>
                   <div style={{ ...labelStyle, color: "#ff9800", marginBottom: "12px" }}>JOB & CLIENT DETAILS</div>
@@ -1806,6 +1863,14 @@ Our Company: ${brand.companyName || "Not specified"}`;
                       <input style={inputStyle} placeholder={placeholder} value={jobInfo[key]} onChange={e => setJobInfo({ ...jobInfo, [key]: e.target.value })} />
                     </div>
                   ))}
+                  <div style={{ marginBottom: "10px" }}>
+                    <label style={labelStyle}>BID NOTES</label>
+                    <textarea style={{ ...inputStyle, height: "70px", resize: "vertical" }}
+                      placeholder="GC wants VE options... tight access, add mobilization... owner may expand scope..."
+                      value={jobInfo.notes}
+                      onChange={e => setJobInfo({ ...jobInfo, notes: e.target.value })}
+                    />
+                  </div>
                 </div>
               )}
             </>
@@ -2106,6 +2171,68 @@ Our Company: ${brand.companyName || "Not specified"}`;
               >
                 ✓ SAVE BRANDING
               </button>
+
+              {/* CLIENT CONTACT BOOK */}
+              <div style={{ marginTop: "20px" }}>
+                <SectionLabel>CLIENT CONTACT BOOK</SectionLabel>
+                <div style={{ fontSize: "10px", color: "#555", marginBottom: "12px", lineHeight: "1.6" }}>
+                  Save GC and client contacts. Quick-select them when building a bid.
+                </div>
+
+                {/* Add new contact */}
+                <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: "3px solid #ff9800", padding: "12px", marginBottom: "12px" }}>
+                  <div style={{ ...labelStyle, color: "#ff9800", marginBottom: "10px" }}>ADD CONTACT</div>
+                  <div style={{ marginBottom: "8px" }}>
+                    <label style={{ ...labelStyle, fontSize: "9px" }}>NAME</label>
+                    <input style={inputStyle} placeholder="John Smith" value={newContact.name} onChange={e => setNewContact({ ...newContact, name: e.target.value })} />
+                  </div>
+                  <div style={{ marginBottom: "8px" }}>
+                    <label style={{ ...labelStyle, fontSize: "9px" }}>COMPANY</label>
+                    <input style={inputStyle} placeholder="BuildRight Construction" value={newContact.company} onChange={e => setNewContact({ ...newContact, company: e.target.value })} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "9px" }}>ROLE</label>
+                      <select style={inputStyle} value={newContact.role} onChange={e => setNewContact({ ...newContact, role: e.target.value })}>
+                        {["GC", "Client", "Owner", "Architect", "Engineer", "Other"].map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "9px" }}>PHONE</label>
+                      <input style={inputStyle} placeholder="555-000-0000" value={newContact.phone} onChange={e => setNewContact({ ...newContact, phone: e.target.value })} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: "10px" }}>
+                    <label style={{ ...labelStyle, fontSize: "9px" }}>EMAIL</label>
+                    <input style={inputStyle} placeholder="john@builright.com" value={newContact.email} onChange={e => setNewContact({ ...newContact, email: e.target.value })} />
+                  </div>
+                  <button onClick={() => newContact.name && saveContact(newContact)} style={{
+                    width: "100%", background: newContact.name ? "#ff9800" : "#2a2a2a",
+                    color: newContact.name ? "#000" : "#555", border: "none", padding: "10px",
+                    fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: newContact.name ? "pointer" : "not-allowed",
+                  }}>+ SAVE CONTACT</button>
+                </div>
+
+                {/* Contact list */}
+                {contacts.length === 0 ? (
+                  <div style={{ color: "#444", fontSize: "10px", textAlign: "center", padding: "20px 0" }}>NO CONTACTS YET</div>
+                ) : (
+                  contacts.map(c => (
+                    <div key={c.id} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "10px 12px", marginBottom: "6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ color: "#f0ece0", fontSize: "12px", fontWeight: "bold" }}>{c.name}</div>
+                        <div style={{ color: "#888", fontSize: "10px" }}>{c.role} · {c.company}</div>
+                        {c.phone && <div style={{ color: "#666", fontSize: "9px" }}>{c.phone}</div>}
+                        {c.email && <div style={{ color: "#666", fontSize: "9px" }}>{c.email}</div>}
+                      </div>
+                      <button onClick={() => deleteContact(c.id)} style={{
+                        background: "transparent", color: "#e53935", border: "1px solid #e5393533",
+                        padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer",
+                      }}>DEL</button>
+                    </div>
+                  ))
+                )}
+              </div>
             </>
           )}
         </div>
@@ -2269,11 +2396,22 @@ Our Company: ${brand.companyName || "Not specified"}`;
                                 {job.jobInfo?.clientName && <span style={{ fontSize: "10px", color: "#888" }}>Client: {job.jobInfo.clientName}</span>}
                                 {job.jobInfo?.gcName && <span style={{ fontSize: "10px", color: "#888" }}>GC: {job.jobInfo.gcName}</span>}
                               </div>
+                              {job.jobInfo?.notes && (
+                                <div style={{ marginTop: "6px", background: "#111", border: "1px solid #ff980033", borderLeft: "2px solid #ff9800", padding: "5px 8px", fontSize: "10px", color: "#c8bfa8", lineHeight: "1.5" }}>
+                                  📝 {job.jobInfo.notes}
+                                </div>
+                              )}
                             </div>
-                            <button onClick={() => { loadJob(job); }} style={{
-                              background: "#f5a623", color: "#000", border: "none", padding: "6px 14px",
-                              fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer", flexShrink: 0, marginLeft: "10px",
-                            }}>LOAD</button>
+                            <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "10px" }}>
+                              <button onClick={() => { loadJob(job); }} style={{
+                                background: "#f5a623", color: "#000", border: "none", padding: "6px 14px",
+                                fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
+                              }}>LOAD</button>
+                              <button onClick={() => quickRebid(job)} style={{
+                                background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "6px 10px",
+                                fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
+                              }}>REBID</button>
+                            </div>
                           </div>
 
                           {/* Status selector */}
