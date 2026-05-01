@@ -263,7 +263,7 @@ function MaterialPricingPanel({ sqft, thickness, psi, rebar, accessDifficulty, p
 }
 
 // ── Job History Panel ──────────────────────────────────────────────
-function JobHistoryPanel({ jobs, onLoad, onDelete }) {
+function JobHistoryPanel({ jobs, onLoad, onDelete, onStatusChange }) {
   const [expandedKey, setExpandedKey] = useState(null);
 
   if (jobs.length === 0) return (
@@ -303,10 +303,15 @@ function JobHistoryPanel({ jobs, onLoad, onDelete }) {
                     {latest.jobInfo?.projectName || latest.address || "NO ADDRESS"}
                   </div>
                   {latest.jobInfo?.projectName && <div style={{ color: "#666", fontSize: "10px", marginBottom: "2px" }}>{latest.address}</div>}
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344", borderRadius: "4px", padding: "1px 6px", fontSize: "9px", letterSpacing: "1px" }}>
                       v{latest.version || 1} — LATEST
                     </span>
+                    {(() => {
+                      const statusColors = { draft: "#666", submitted: "#2196f3", won: "#4caf50", lost: "#e53935" };
+                      const s = latest.status || "draft";
+                      return <span style={{ background: `${statusColors[s]}22`, color: statusColors[s], border: `1px solid ${statusColors[s]}44`, borderRadius: "4px", padding: "1px 6px", fontSize: "9px", letterSpacing: "1px" }}>{s.toUpperCase()}</span>;
+                    })()}
                     {hasMultiple && <span style={{ color: "#555", fontSize: "9px", letterSpacing: "1px" }}>{revisions.length} REVISIONS</span>}
                   </div>
                 </div>
@@ -320,6 +325,22 @@ function JobHistoryPanel({ jobs, onLoad, onDelete }) {
                   <button onClick={() => onDelete(latest.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
                 </div>
               </div>
+
+              {/* Status quick-change */}
+              {onStatusChange && (
+                <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+                  {[{ value: "draft", label: "DRAFT", color: "#666" }, { value: "submitted", label: "SUBMITTED", color: "#2196f3" }, { value: "won", label: "WON", color: "#4caf50" }, { value: "lost", label: "LOST", color: "#e53935" }].map(({ value, label, color }) => {
+                    const isActive = (latest.status || "draft") === value;
+                    return (
+                      <button key={value} onClick={() => onStatusChange(latest.id, value)} style={{
+                        flex: 1, background: isActive ? `${color}22` : "transparent", color: isActive ? color : "#333",
+                        border: `1px solid ${isActive ? color : "#2a2a2a"}`, padding: "4px 2px",
+                        fontFamily: "'Courier New', monospace", fontSize: "7px", letterSpacing: "1px", cursor: "pointer", fontWeight: isActive ? "bold" : "normal",
+                      }}>{label}</button>
+                    );
+                  })}
+                </div>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px" }}>
                 {[
                   { l: "POUR TYPE", v: latest.bidForm?.pourType || "-" },
@@ -674,6 +695,7 @@ export default function ConcreteIntelTool() {
       jobInfo: { ...jobInfo },
       bidForm: { ...bidForm },
       bidOutput,
+      status: "draft",
       savedAt: new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
     };
 
@@ -694,6 +716,18 @@ export default function ConcreteIntelTool() {
       await loadJobsFromStorage();
     } catch {
       setJobs(prev => prev.filter(j => j.id !== id));
+    }
+  };
+
+  const updateJobStatus = async (id, status) => {
+    const job = jobs.find(j => j.id === id);
+    if (!job) return;
+    const updated = { ...job, status };
+    try {
+      await window.storage.set(`job:${id}`, JSON.stringify(updated));
+      await loadJobsFromStorage();
+    } catch {
+      setJobs(prev => prev.map(j => j.id === id ? updated : j));
     }
   };
 
@@ -1290,19 +1324,46 @@ Our Company: ${brand.companyName || "Not specified"}`;
                   return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
                 }, 0);
                 const avgBid = uniqueProjects > 0 ? totalBidValue / uniqueProjects : 0;
+                // Get latest revision per project for status
+                const latestByProject = {};
+                jobs.forEach(j => {
+                  const key = j.projectKey || j.id;
+                  if (!latestByProject[key] || (j.version || 1) > (latestByProject[key].version || 1)) latestByProject[key] = j;
+                });
+                const latestJobs = Object.values(latestByProject);
+                const wonCount = latestJobs.filter(j => j.status === "won").length;
+                const lostCount = latestJobs.filter(j => j.status === "lost").length;
+                const submittedCount = latestJobs.filter(j => j.status === "submitted").length;
+                const wonValue = jobs.filter(j => j.status === "won").reduce((sum, j) => {
+                  const match = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                  return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
+                }, 0);
                 return (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-                    {[
-                      { label: "TOTAL BIDS", value: totalJobs, color: "#f5a623" },
-                      { label: "PROJECTS", value: uniqueProjects, color: "#2196f3" },
-                      { label: "TOTAL BID VALUE", value: `$${totalBidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#4caf50" },
-                      { label: "AVG BID SIZE", value: avgBid > 0 ? `$${avgBid.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", color: "#9c27b0" },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} style={{ background: "#111", border: `1px solid ${color}22`, padding: "10px 12px" }}>
-                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>{label}</div>
-                        <div style={{ fontSize: "16px", fontWeight: "bold", color }}>{value}</div>
-                      </div>
-                    ))}
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                      {[
+                        { label: "TOTAL BIDS", value: totalJobs, color: "#f5a623" },
+                        { label: "SUBMITTED", value: submittedCount, color: "#2196f3" },
+                        { label: "WON", value: wonCount, color: "#4caf50" },
+                        { label: "LOST", value: lostCount, color: "#e53935" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ background: "#111", border: `1px solid ${color}22`, padding: "10px 12px" }}>
+                          <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>{label}</div>
+                          <div style={{ fontSize: "18px", fontWeight: "bold", color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                      {[
+                        { label: "TOTAL BID VALUE", value: `$${totalBidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#f5a623" },
+                        { label: "WON VALUE", value: wonValue > 0 ? `$${wonValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", color: "#4caf50" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ background: "#111", border: `1px solid ${color}22`, padding: "10px 12px" }}>
+                          <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>{label}</div>
+                          <div style={{ fontSize: "14px", fontWeight: "bold", color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })()}
@@ -1924,6 +1985,28 @@ Our Company: ${brand.companyName || "Not specified"}`;
                             }}>LOAD</button>
                           </div>
 
+                          {/* Status selector */}
+                          <div style={{ display: "flex", gap: "4px", marginBottom: "10px" }}>
+                            {[
+                              { value: "draft", label: "DRAFT", color: "#666" },
+                              { value: "submitted", label: "SUBMITTED", color: "#2196f3" },
+                              { value: "won", label: "WON", color: "#4caf50" },
+                              { value: "lost", label: "LOST", color: "#e53935" },
+                            ].map(({ value, label, color }) => {
+                              const isActive = (job.status || "draft") === value;
+                              return (
+                                <button key={value} onClick={() => updateJobStatus(job.id, value)} style={{
+                                  flex: 1, background: isActive ? `${color}22` : "transparent",
+                                  color: isActive ? color : "#333",
+                                  border: `1px solid ${isActive ? color : "#2a2a2a"}`,
+                                  padding: "5px 4px", fontFamily: "'Courier New', monospace",
+                                  fontSize: "8px", letterSpacing: "1px", cursor: "pointer",
+                                  fontWeight: isActive ? "bold" : "normal",
+                                }}>{label}</button>
+                              );
+                            })}
+                          </div>
+
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "6px" }}>
                             {[
                               { l: "TOTAL BID", v: bidValue ? `$${bidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", c: "#4caf50" },
@@ -2083,7 +2166,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
           {phase === 5 && (
             <>
               <SectionLabel>SAVED BIDS</SectionLabel>
-              <JobHistoryPanel jobs={jobs} onLoad={loadJob} onDelete={deleteJob} />
+              <JobHistoryPanel jobs={jobs} onLoad={loadJob} onDelete={deleteJob} onStatusChange={updateJobStatus} />
             </>
           )}
 
