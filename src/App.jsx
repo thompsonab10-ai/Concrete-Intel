@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
-const PHASES = ["DASHBOARD", "BID ENGINE", "CHANGE ORDER", "JOB HISTORY", "PRICE BOOK", "SETTINGS"];
+const PHASES = ["DASHBOARD", "BID ENGINE", "CHANGE ORDER", "JOB HISTORY", "PRICE BOOK", "SETTINGS", "HELP"];
 
 // ── Default prices — contractor overrides these in PRICE BOOK ────────
 const DEFAULT_PRICES = {
@@ -2436,6 +2436,37 @@ Our Company: ${brand.companyName || "Not specified"}`;
               </div>
             </>
           )}
+
+          {/* PHASE 6: Help */}
+          {phase === 6 && (
+            <>
+              <SectionLabel>HELP & GUIDE</SectionLabel>
+              <div style={{ fontSize: "11px", color: "#666", lineHeight: "1.8", marginBottom: "16px" }}>
+                Concrete Field Ops is an AI-powered platform built for concrete subcontractors. It handles bidding, change orders, job tracking, and profit analysis — all in one place.
+              </div>
+
+              {[
+                { label: "📊 Dashboard", desc: "Home base. Job status, win rate, profit analytics." },
+                { label: "🏗 Bid Engine", desc: "AI-generated estimates using your Price Book rates. Export proposals and material lists." },
+                { label: "📋 Change Order", desc: "Link COs to jobs by number. Auto-pulls original contract value." },
+                { label: "📂 Job History", desc: "Full job file per job number — bids, revisions, and COs in one view." },
+                { label: "💲 Price Book", desc: "Your actual rates. All calculations use these numbers." },
+                { label: "⚙ Settings", desc: "Company branding and client contact book." },
+              ].map(({ label, desc }) => (
+                <div key={label} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "10px 12px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "11px", color: "#f0ece0", marginBottom: "3px" }}>{label}</div>
+                  <div style={{ fontSize: "10px", color: "#666", lineHeight: "1.5" }}>{desc}</div>
+                </div>
+              ))}
+
+              <div style={{ background: "#0d1a0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "12px", marginTop: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50", marginBottom: "8px" }}>FIRST TIME SETUP</div>
+                {["1. Set your rates in Price Book", "2. Add branding in Settings", "3. Create your first bid in Bid Engine", "4. Save it — it appears in Dashboard and Job History"].map(s => (
+                  <div key={s} style={{ fontSize: "10px", color: "#888", marginBottom: "6px" }}>→ {s}</div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right Panel */}
@@ -2982,6 +3013,141 @@ ${brand.email || ""}`;
               <div style={{ marginTop: "12px", background: "#111", border: "1px solid #2a2a2a", padding: "12px", fontSize: "11px", color: "#555", letterSpacing: "1px" }}>
                 → This preview reflects how your branding will appear on all exported bid documents.<br />
                 → Fill in your info on the left and hit SAVE BRANDING.
+              </div>
+            </>
+          )}
+
+          {/* HELP RIGHT PANEL */}
+          {phase === 6 && (
+            <>
+              <SectionLabel>HOW TO USE THIS PLATFORM</SectionLabel>
+              <div style={{ fontSize: "11px", color: "#666", marginBottom: "20px", lineHeight: "1.7" }}>
+                Concrete Field Ops is built for concrete subcontractors. Everything here is designed to save you time on paperwork and help you understand your business better.
+              </div>
+
+              {[
+                {
+                  title: "DASHBOARD",
+                  color: "#f5a623",
+                  icon: "📊",
+                  steps: [
+                    "Your home base. Open this first every morning.",
+                    "Quick Stats show total bids, submitted, won, and lost counts at a glance.",
+                    "Win Rate Analytics shows your close rate and average bid size — only populates after you save jobs.",
+                    "Active Jobs shows every project with its status, bid value, and revision count.",
+                    "Mark jobs WON → a green close-out panel appears to enter actual revenue and cost.",
+                    "Profit by Pour Type chart appears once you have closed jobs with actuals entered — shows which work makes you the most money.",
+                    "LOAD button on any job card restores that bid to the Bid Engine.",
+                    "REBID copies all specs from a job into a fresh bid — use this when a GC asks for a revised number.",
+                  ]
+                },
+                {
+                  title: "BID ENGINE",
+                  color: "#f5a623",
+                  icon: "🏗",
+                  steps: [
+                    "Enter the job site address at the top — starts auto-completing as you type.",
+                    "A Job Number is auto-generated (e.g. JOB-2025-001). You can edit it. This links your bid to any change orders later.",
+                    "Fill in Pour Type, Square Footage, Thickness, Concrete Mix, and Rebar. These drive the estimate.",
+                    "Concrete Mix and Rebar dropdowns pull directly from your Price Book — update your rates there and they show here.",
+                    "LIVE PRICING toggle shows a material takeoff with quantities and costs as you fill the form.",
+                    "MARKUP CALC lets you apply overhead and profit % on top of the estimate.",
+                    "CLIENT / JOB INFO section adds project name, client, GC, PO number, expiry date, and notes to the bid.",
+                    "Hit GENERATE BID ESTIMATE — Claude AI writes a professional estimate using your actual rates.",
+                    "BID PROPOSAL exports a print-ready document with your branding, signature block, and terms.",
+                    "MATERIAL LIST exports a supplier order sheet with quantities and checkboxes for your foreman.",
+                    "EMAIL SUMMARY auto-generates a copy/paste email body to send with the proposal.",
+                    "SAVE JOB stores the bid in Job History under the job number.",
+                  ]
+                },
+                {
+                  title: "CHANGE ORDER",
+                  color: "#e53935",
+                  icon: "📋",
+                  steps: [
+                    "Select the Reference Job from the dropdown — shows all saved jobs with their numbers and bid values.",
+                    "Selecting a job auto-fills the original contract value so you can see the full picture.",
+                    "Describe what changed, why, and what work was added or removed.",
+                    "Use the Cost Calculator to enter added SF, rebar, labor hours, and equipment days — Claude calculates the cost impact using your Price Book rates.",
+                    "The live summary shows Net Change + Revised Contract Total before you generate.",
+                    "GENERATE CHANGE ORDER writes a formal CO document with both parties' signature blocks.",
+                    "SAVE TO JOB links the CO to the original job number — it appears in Job History under that job file.",
+                    "EXPORT CO downloads a print-ready change order document.",
+                  ]
+                },
+                {
+                  title: "JOB HISTORY",
+                  color: "#2196f3",
+                  icon: "📂",
+                  steps: [
+                    "Every saved bid and change order lives here, organized by Job Number.",
+                    "One card per job — expands to show all bid revisions (v1, v2, v3) and all change orders (CO-01, CO-02).",
+                    "The card shows Original Bid, CO Total, and Running Total side by side.",
+                    "Use status buttons to mark each job DRAFT / SUBMITTED / WON / LOST.",
+                    "LOAD restores any revision to the Bid Engine with all form fields intact.",
+                    "DEL removes individual revisions or change orders from the file.",
+                  ]
+                },
+                {
+                  title: "PRICE BOOK",
+                  color: "#4caf50",
+                  icon: "💲",
+                  steps: [
+                    "This is the most important setup step. Enter your actual rates here.",
+                    "Groups: Concrete, Reinforcement, Materials, Equipment, Labor.",
+                    "ADD NEW LINE ITEM — enter name, price, unit, and category. Saves instantly.",
+                    "EDIT any existing item inline — click EDIT on the row, change the values, hit SAVE.",
+                    "DEL removes any item — default or custom.",
+                    "RESET TO DEFAULTS restores the original market reference rates.",
+                    "All bid estimates, material takeoffs, and change order calculations use these rates. Keep them current.",
+                    "Concrete Mix and Rebar dropdowns in Bid Engine are built from this list automatically.",
+                  ]
+                },
+                {
+                  title: "SETTINGS",
+                  color: "#888",
+                  icon: "⚙",
+                  steps: [
+                    "COMPANY BRANDING — enter your company name, license number, phone, email, city, state, tagline.",
+                    "This information appears on every exported document: bid proposals, change orders, material lists.",
+                    "Hit SAVE BRANDING to persist across sessions.",
+                    "CLIENT CONTACT BOOK — add GCs and clients with name, company, role, phone, email.",
+                    "Saved contacts appear as quick-select buttons in the Bid Engine when Client / Job Info is open.",
+                    "One tap fills in GC name or client name — no more retyping.",
+                  ]
+                },
+              ].map(({ title, color, icon, steps }) => (
+                <div key={title} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderLeft: `3px solid ${color}`, marginBottom: "16px", padding: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                    <span style={{ fontSize: "18px" }}>{icon}</span>
+                    <div style={{ fontSize: "11px", letterSpacing: "3px", color, fontWeight: "bold" }}>{title}</div>
+                  </div>
+                  {steps.map((step, i) => (
+                    <div key={i} style={{ display: "flex", gap: "10px", marginBottom: "8px", alignItems: "flex-start" }}>
+                      <span style={{ color, fontSize: "10px", flexShrink: 0, marginTop: "2px" }}>{String(i + 1).padStart(2, "0")}</span>
+                      <span style={{ fontSize: "11px", color: "#888", lineHeight: "1.6" }}>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              <div style={{ background: "#111", border: "1px solid #f5a62333", padding: "14px", marginTop: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#f5a623", marginBottom: "8px" }}>WORKFLOW — START TO FINISH</div>
+                {[
+                  "Set up your Price Book with actual rates",
+                  "Add company branding in Settings",
+                  "Open Bid Engine → enter address, fill specs, generate estimate",
+                  "Export Bid Proposal and email to GC",
+                  "Mark job SUBMITTED on Dashboard",
+                  "GC awards job → mark WON → generate Change Orders as scope evolves",
+                  "Job complete → enter actual revenue and cost in close-out panel",
+                  "Review Profit by Pour Type on Dashboard to understand where you make money",
+                ].map((step, i) => (
+                  <div key={i} style={{ display: "flex", gap: "12px", marginBottom: "8px", alignItems: "flex-start" }}>
+                    <span style={{ background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344", borderRadius: "50%", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", flexShrink: 0 }}>{i + 1}</span>
+                    <span style={{ fontSize: "11px", color: "#888", lineHeight: "1.6", paddingTop: "2px" }}>{step}</span>
+                  </div>
+                ))}
               </div>
             </>
           )}
