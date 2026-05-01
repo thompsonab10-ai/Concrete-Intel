@@ -1294,6 +1294,7 @@ Pour Type: ${bidForm.pourType}, ${bidForm.sqft} SF, ${bidForm.thickness}" thick,
 Change Description: ${coForm.description}
 Reason for Change: ${coForm.reason || "Field conditions / Owner request"}
 Scope Changes: ${coForm.scopeChanges || "As described above"}
+Original Contract Value: ${(() => { const m = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i); return m ? `$${m[1]}` : "Not available"; })()}
 Estimated Cost Impact: ${coForm.manualOverride ? (coForm.manualCostImpact || "To be calculated") : (() => {
       const P = prices;
       const sf = parseFloat(coForm.addedSF || 0);
@@ -1310,7 +1311,10 @@ Estimated Cost Impact: ${coForm.manualOverride ? (coForm.manualCostImpact || "To
       const sfCost = sf * ((P.placement_labor?.price || 1.20) + (P.finishing_labor?.price || 2.85));
       const subtotal = concreteCost + rebarCost + sfCost + laborCost + equipCost;
       const total = subtotal * 1.12 * 1.10;
-      return total > 0 ? `+$${total.toLocaleString("en-US", { maximumFractionDigits: 0 })} (${sf} SF @ ${tk}" thick = ${cy.toFixed(1)} CY + labor + OH/profit)` : "To be calculated";
+      const origMatch = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+      const orig = origMatch ? parseFloat(origMatch[1].replace(/,/g, "")) : null;
+      const revised = orig && total > 0 ? `$${(orig + total).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "N/A";
+      return total > 0 ? `+$${total.toLocaleString("en-US", { maximumFractionDigits: 0 })} — Revised Contract Total: ${revised}` : "To be calculated";
     })()}
 Schedule Impact: ${coForm.scheduleImpact || "None anticipated"}`;
 
@@ -1872,9 +1876,23 @@ Our Company: ${brand.companyName || "Not specified"}`;
           {phase === 3 && (
             <>
               <SectionLabel>CHANGE ORDER DETAILS</SectionLabel>
-              <div style={{ background: "#111", border: "1px solid #e5393522", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", letterSpacing: "0.5px", lineHeight: "1.7" }}>
-                Pulls job info from Bid Engine. Fill in your BID ENGINE client details first for a fully branded change order.
-              </div>
+
+              {/* Original contract value — auto-pulled from loaded bid */}
+              {(() => {
+                const match = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                const originalValue = match ? parseFloat(match[1].replace(/,/g, "")) : null;
+                return originalValue ? (
+                  <div style={{ background: "#0d1a0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "10px 14px", marginBottom: "14px", fontFamily: "'Courier New', monospace" }}>
+                    <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50", marginBottom: "4px" }}>ORIGINAL CONTRACT VALUE</div>
+                    <div style={{ fontSize: "18px", fontWeight: "bold", color: "#4caf50" }}>${originalValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
+                    <div style={{ fontSize: "9px", color: "#555", marginTop: "3px" }}>{bidForm.pourType} · {bidForm.sqft} SF · {address || "No address"}</div>
+                  </div>
+                ) : (
+                  <div style={{ background: "#111", border: "1px solid #e5393522", padding: "10px 12px", marginBottom: "14px", fontSize: "10px", color: "#888", lineHeight: "1.7" }}>
+                    No bid loaded. Go to BID ENGINE, generate a bid, then return here — the original contract value will auto-populate.
+                  </div>
+                );
+              })()}
 
               <div style={{ marginBottom: "12px" }}>
                 <label style={labelStyle}>DESCRIPTION OF CHANGE *</label>
@@ -2004,6 +2022,21 @@ Our Company: ${brand.companyName || "Not specified"}`;
                           <span>NET CHANGE</span>
                           <span>{total > 0 ? `+$${total.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "$0"}</span>
                         </div>
+                        {(() => {
+                          const origMatch = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                          const orig = origMatch ? parseFloat(origMatch[1].replace(/,/g, "")) : null;
+                          if (!orig || total === 0) return null;
+                          return (
+                            <div style={{ borderTop: "1px solid #2a2a2a", marginTop: "6px", paddingTop: "6px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", color: "#555", fontSize: "10px", marginBottom: "3px" }}>
+                                <span>Original Contract</span><span>${orig.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", color: "#4caf50", fontWeight: "bold", fontSize: "12px" }}>
+                                <span>REVISED CONTRACT</span><span>${(orig + total).toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
