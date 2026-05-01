@@ -2224,6 +2224,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                 });
                 const projectList = Object.values(grouped).sort((a, b) => b.id - a.id);
                 const allRevisions = jobs;
+                const now = Date.now();
 
                 return (
                   <div>
@@ -2232,8 +2233,32 @@ Our Company: ${brand.companyName || "Not specified"}`;
                       const bidValue = match ? parseFloat(match[1].replace(/,/g, "")) : null;
                       const revCount = allRevisions.filter(j => (j.projectKey || `legacy_${j.id}`) === (job.projectKey || `legacy_${job.id}`)).length;
 
+                      // Expiry calculation — 30 days from save date, only for submitted bids
+                      const expiryAlert = (() => {
+                        if ((job.status || "draft") !== "submitted") return null;
+                        const expiryDate = job.jobInfo?.bidExpiry
+                          ? new Date(job.jobInfo.bidExpiry).getTime()
+                          : job.id + (30 * 24 * 60 * 60 * 1000);
+                        const daysLeft = Math.ceil((expiryDate - now) / (24 * 60 * 60 * 1000));
+                        if (daysLeft <= 7) return { days: daysLeft, urgent: daysLeft <= 3 };
+                        return null;
+                      })();
+
                       return (
-                        <div key={job.id} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", marginBottom: "10px", padding: "14px" }}>
+                        <div key={job.id} style={{ background: "#0d0d0d", border: `1px solid ${expiryAlert?.urgent ? "#e53935" : expiryAlert ? "#f5a623" : "#2a2a2a"}`, marginBottom: "10px", padding: "14px" }}>
+
+                          {/* Expiry alert banner */}
+                          {expiryAlert && (
+                            <div style={{ background: expiryAlert.urgent ? "#1a0000" : "#1a1000", border: `1px solid ${expiryAlert.urgent ? "#e53935" : "#f5a623"}`, padding: "6px 10px", marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: "10px", color: expiryAlert.urgent ? "#e53935" : "#f5a623", letterSpacing: "1px", fontWeight: "bold" }}>
+                                {expiryAlert.days <= 0 ? "⚠ BID EXPIRED — FOLLOW UP NOW" : `⚠ EXPIRES IN ${expiryAlert.days} DAY${expiryAlert.days === 1 ? "" : "S"}`}
+                              </span>
+                              <button onClick={() => { loadJob(job); setPhase(1); }} style={{ background: "transparent", color: expiryAlert.urgent ? "#e53935" : "#f5a623", border: `1px solid ${expiryAlert.urgent ? "#e53935" : "#f5a623"}44`, padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>
+                                REVISE
+                              </button>
+                            </div>
+                          )}
+
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ color: "#f0ece0", fontSize: "14px", fontWeight: "bold", marginBottom: "2px" }}>
@@ -2330,6 +2355,45 @@ Our Company: ${brand.companyName || "Not specified"}`;
                       💾 {savedMsg || "SAVE JOB"}
                     </button>
                   </div>
+
+                  {/* Email summary */}
+                  {(() => {
+                    const totalMatch = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                    const total = totalMatch ? `$${totalMatch[1]}` : "see attached";
+                    const expiryDate = jobInfo.bidExpiry || (() => {
+                      const d = new Date(); d.setDate(d.getDate() + 30);
+                      return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+                    })();
+                    const emailBody = `Hi ${jobInfo.clientName || jobInfo.gcName || "[Name]"},
+
+Please find our bid proposal attached for ${jobInfo.projectName || address || "the above-referenced project"}.
+
+Project: ${jobInfo.projectName || address || "—"}
+Pour Type: ${bidForm.pourType || "—"}
+Total Bid: ${total}
+Bid Valid Through: ${expiryDate}
+
+Please review the attached proposal and let me know if you have any questions or need any clarifications. We are available to discuss scope, scheduling, or value engineering options at your convenience.
+
+Thank you for the opportunity to bid on this project. We look forward to working with you.
+
+${brand.companyName || ""}
+${brand.phone || ""}
+${brand.email || ""}`;
+
+                    return (
+                      <div style={{ marginTop: "8px", background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555" }}>✉ EMAIL SUMMARY</div>
+                          <button onClick={() => navigator.clipboard.writeText(emailBody).then(() => alert("Copied to clipboard!"))} style={{
+                            background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344",
+                            padding: "4px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
+                          }}>COPY</button>
+                        </div>
+                        <pre style={{ fontSize: "10px", color: "#888", whiteSpace: "pre-wrap", lineHeight: "1.6", fontFamily: "'Courier New', monospace", maxHeight: "160px", overflowY: "auto" }}>{emailBody}</pre>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <>
