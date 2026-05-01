@@ -2251,6 +2251,95 @@ Our Company: ${brand.companyName || "Not specified"}`;
 
           {phase === 0 && (
             <>
+              {/* WIN RATE ANALYTICS */}
+              {jobs.length > 0 && (() => {
+                const latestByProject = {};
+                jobs.forEach(j => {
+                  const key = j.projectKey || j.id;
+                  if (!latestByProject[key] || (j.version || 1) > (latestByProject[key].version || 1)) latestByProject[key] = j;
+                });
+                const latest = Object.values(latestByProject);
+                const won = latest.filter(j => j.status === "won");
+                const lost = latest.filter(j => j.status === "lost");
+                const submitted = latest.filter(j => j.status === "submitted");
+                const decided = won.length + lost.length;
+                const closeRate = decided > 0 ? Math.round((won.length / decided) * 100) : null;
+
+                // Bid value by pour type
+                const byPourType = {};
+                latest.forEach(j => {
+                  const pt = j.bidForm?.pourType || "other";
+                  const match = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+                  const val = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+                  if (!byPourType[pt]) byPourType[pt] = { count: 0, total: 0, won: 0 };
+                  byPourType[pt].count++;
+                  byPourType[pt].total += val;
+                  if (j.status === "won") byPourType[pt].won++;
+                });
+
+                const maxBidValue = Math.max(...Object.values(byPourType).map(v => v.total / v.count || 0), 1);
+
+                return (
+                  <div style={{ marginBottom: "24px" }}>
+                    <SectionLabel>WIN RATE ANALYTICS</SectionLabel>
+
+                    {/* Close rate + pipeline */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+                      <div style={{ background: "#0d0d0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "12px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>CLOSE RATE</div>
+                        <div style={{ fontSize: "24px", fontWeight: "bold", color: closeRate !== null ? (closeRate >= 50 ? "#4caf50" : "#e53935") : "#333" }}>
+                          {closeRate !== null ? `${closeRate}%` : "—"}
+                        </div>
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{won.length}W / {lost.length}L</div>
+                      </div>
+                      <div style={{ background: "#0d0d0d", border: "1px solid #2196f333", borderLeft: "3px solid #2196f3", padding: "12px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>IN PIPELINE</div>
+                        <div style={{ fontSize: "24px", fontWeight: "bold", color: "#2196f3" }}>{submitted.length}</div>
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>submitted bids</div>
+                      </div>
+                      <div style={{ background: "#0d0d0d", border: "1px solid #f5a62333", borderLeft: "3px solid #f5a623", padding: "12px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>AVG BID SIZE</div>
+                        <div style={{ fontSize: "18px", fontWeight: "bold", color: "#f5a623" }}>
+                          {(() => {
+                            const vals = latest.map(j => { const m = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i); return m ? parseFloat(m[1].replace(/,/g, "")) : 0; }).filter(v => v > 0);
+                            const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                            return avg > 0 ? `$${avg.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—";
+                          })()}
+                        </div>
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{latest.length} projects</div>
+                      </div>
+                    </div>
+
+                    {/* Avg bid by pour type bar chart */}
+                    {Object.keys(byPourType).length > 0 && (
+                      <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "14px", marginBottom: "0" }}>
+                        <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555", marginBottom: "12px" }}>AVG BID BY POUR TYPE</div>
+                        {Object.entries(byPourType).sort(([,a],[,b]) => (b.total/b.count) - (a.total/a.count)).map(([pt, data]) => {
+                          const avg = data.total / data.count;
+                          const pct = Math.round((avg / maxBidValue) * 100);
+                          const winRate = data.count > 0 ? Math.round((data.won / data.count) * 100) : 0;
+                          return (
+                            <div key={pt} style={{ marginBottom: "10px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "10px", color: "#c8bfa8" }}>{pt.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                <div style={{ display: "flex", gap: "12px" }}>
+                                  <span style={{ fontSize: "10px", color: "#f5a623" }}>{avg > 0 ? `$${avg.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</span>
+                                  <span style={{ fontSize: "10px", color: "#4caf50" }}>{winRate}% close</span>
+                                  <span style={{ fontSize: "10px", color: "#555" }}>{data.count} bids</span>
+                                </div>
+                              </div>
+                              <div style={{ background: "#1a1a1a", height: "6px", borderRadius: "2px", overflow: "hidden" }}>
+                                <div style={{ background: "#f5a623", height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <SectionLabel>ACTIVE JOBS</SectionLabel>
               {jobs.length === 0 ? (
                 <div style={{ height: "300px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
