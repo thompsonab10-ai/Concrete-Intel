@@ -265,114 +265,129 @@ function MaterialPricingPanel({ sqft, thickness, psi, rebar, accessDifficulty, p
 // ── Job History Panel ──────────────────────────────────────────────
 function JobHistoryPanel({ jobs, onLoad, onDelete, onStatusChange }) {
   const [expandedKey, setExpandedKey] = useState(null);
+  const bids = jobs.filter(j => j.type !== "change_order");
+  const changeOrders = jobs.filter(j => j.type === "change_order");
 
-  if (jobs.length === 0) return (
+  if (bids.length === 0 && changeOrders.length === 0) return (
     <div style={{ color: "#444", fontSize: "11px", letterSpacing: "1px", textAlign: "center", padding: "60px 0" }}>
       NO SAVED JOBS<br /><span style={{ fontSize: "10px", marginTop: "8px", display: "block" }}>SAVE YOUR FIRST BID TO SEE IT HERE</span>
     </div>
   );
 
-  // Group by projectKey
   const grouped = {};
-  jobs.forEach(job => {
-    const key = job.projectKey || `legacy_${job.id}`;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(job);
+  bids.forEach(job => {
+    const jobNum = job.jobInfo?.jobNumber || job.projectKey || `legacy_${job.id}`;
+    if (!grouped[jobNum]) grouped[jobNum] = { bids: [], cos: [] };
+    grouped[jobNum].bids.push(job);
   });
-
-  // Sort each group by version descending
-  Object.values(grouped).forEach(group => group.sort((a, b) => (b.version || 1) - (a.version || 1)));
-
-  // Sort groups by latest job date
-  const sortedGroups = Object.entries(grouped).sort(([, a], [, b]) => b[0].id - a[0].id);
+  changeOrders.forEach(co => {
+    const jobNum = co.linkedJobNumber || "__unlinked__";
+    if (!grouped[jobNum]) grouped[jobNum] = { bids: [], cos: [] };
+    grouped[jobNum].cos.push(co);
+  });
+  Object.values(grouped).forEach(g => g.bids.sort((a, b) => (b.version || 1) - (a.version || 1)));
+  const sortedGroups = Object.entries(grouped).sort(([, a], [, b]) => {
+    const aL = Math.max(...[...a.bids, ...a.cos].map(j => j.id), 0);
+    const bL = Math.max(...[...b.bids, ...b.cos].map(j => j.id), 0);
+    return bL - aL;
+  });
+  const statusColors = { draft: "#666", submitted: "#2196f3", won: "#4caf50", lost: "#e53935" };
 
   return (
     <div>
-      {sortedGroups.map(([key, revisions]) => {
-        const latest = revisions[0];
-        const isExpanded = expandedKey === key;
-        const hasMultiple = revisions.length > 1;
+      {sortedGroups.map(([jobNum, group]) => {
+        const latest = group.bids[0];
+        const isExpanded = expandedKey === jobNum;
+        const hasCOs = group.cos.length > 0;
+        const origMatch = latest?.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+        const origValue = origMatch ? parseFloat(origMatch[1].replace(/,/g, "")) : 0;
+        const coTotal = group.cos.reduce((sum, co) => {
+          const m = co.coOutput?.match(/NET CHANGE[^$\d]*\$?([\d,]+)/i);
+          return sum + (m ? parseFloat(m[1].replace(/,/g, "")) : 0);
+        }, 0);
+        const status = latest?.status || "draft";
 
         return (
-          <div key={key} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", marginBottom: "12px" }}>
-            {/* Project header */}
-            <div style={{ padding: "12px", borderBottom: hasMultiple ? "1px solid #1a1a1a" : "none" }}>
+          <div key={jobNum} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", marginBottom: "12px" }}>
+            <div style={{ padding: "14px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: "#f0ece0", fontSize: "13px", marginBottom: "2px" }}>
-                    {latest.jobInfo?.projectName || latest.address || "NO ADDRESS"}
-                  </div>
-                  {latest.jobInfo?.projectName && <div style={{ color: "#666", fontSize: "10px", marginBottom: "2px" }}>{latest.address}</div>}
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344", borderRadius: "4px", padding: "1px 6px", fontSize: "9px", letterSpacing: "1px" }}>
-                      v{latest.version || 1} — LATEST
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px", flexWrap: "wrap" }}>
+                    <span style={{ background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344", borderRadius: "4px", padding: "2px 8px", fontSize: "10px", fontWeight: "bold" }}>
+                      {jobNum === "__unlinked__" ? "UNLINKED COs" : jobNum}
                     </span>
-                    {(() => {
-                      const statusColors = { draft: "#666", submitted: "#2196f3", won: "#4caf50", lost: "#e53935" };
-                      const s = latest.status || "draft";
-                      return <span style={{ background: `${statusColors[s]}22`, color: statusColors[s], border: `1px solid ${statusColors[s]}44`, borderRadius: "4px", padding: "1px 6px", fontSize: "9px", letterSpacing: "1px" }}>{s.toUpperCase()}</span>;
-                    })()}
-                    {hasMultiple && <span style={{ color: "#555", fontSize: "9px", letterSpacing: "1px" }}>{revisions.length} REVISIONS</span>}
+                    <span style={{ background: `${statusColors[status]}22`, color: statusColors[status], border: `1px solid ${statusColors[status]}44`, borderRadius: "4px", padding: "1px 6px", fontSize: "9px" }}>
+                      {status.toUpperCase()}
+                    </span>
+                    {hasCOs && <span style={{ color: "#e53935", fontSize: "9px" }}>{group.cos.length} CO{group.cos.length > 1 ? "s" : ""}</span>}
+                  </div>
+                  <div style={{ color: "#f0ece0", fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>
+                    {latest?.jobInfo?.projectName || latest?.address || "Unnamed Project"}
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    {latest?.jobInfo?.clientName && <span style={{ fontSize: "10px", color: "#666" }}>Client: {latest.jobInfo.clientName}</span>}
+                    {latest?.jobInfo?.gcName && <span style={{ fontSize: "10px", color: "#666" }}>GC: {latest.jobInfo.gcName}</span>}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "8px" }}>
-                  <button onClick={() => onLoad(latest)} style={{ background: "#f5a623", color: "#000", border: "none", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>LOAD</button>
-                  {hasMultiple && (
-                    <button onClick={() => setExpandedKey(isExpanded ? null : key)} style={{ background: "transparent", color: "#2196f3", border: "1px solid #2196f344", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>
-                      {isExpanded ? "▲" : "▼"} REVS
-                    </button>
-                  )}
-                  <button onClick={() => onDelete(latest.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
+                <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "10px" }}>
+                  {latest && <button onClick={() => onLoad(latest)} style={{ background: "#f5a623", color: "#000", border: "none", padding: "5px 12px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>LOAD</button>}
+                  <button onClick={() => setExpandedKey(isExpanded ? null : jobNum)} style={{ background: "transparent", color: "#2196f3", border: "1px solid #2196f344", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>{isExpanded ? "▲" : "▼"}</button>
+                  {latest && <button onClick={() => onDelete(latest.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "5px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>}
                 </div>
               </div>
 
-              {/* Status quick-change */}
-              {onStatusChange && (
-                <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+              {latest && onStatusChange && (
+                <div style={{ display: "flex", gap: "4px", marginBottom: "10px" }}>
                   {[{ value: "draft", label: "DRAFT", color: "#666" }, { value: "submitted", label: "SUBMITTED", color: "#2196f3" }, { value: "won", label: "WON", color: "#4caf50" }, { value: "lost", label: "LOST", color: "#e53935" }].map(({ value, label, color }) => {
                     const isActive = (latest.status || "draft") === value;
-                    return (
-                      <button key={value} onClick={() => onStatusChange(latest.id, value)} style={{
-                        flex: 1, background: isActive ? `${color}22` : "transparent", color: isActive ? color : "#333",
-                        border: `1px solid ${isActive ? color : "#2a2a2a"}`, padding: "4px 2px",
-                        fontFamily: "'Courier New', monospace", fontSize: "7px", letterSpacing: "1px", cursor: "pointer", fontWeight: isActive ? "bold" : "normal",
-                      }}>{label}</button>
-                    );
+                    return <button key={value} onClick={() => onStatusChange(latest.id, value)} style={{ flex: 1, background: isActive ? `${color}22` : "transparent", color: isActive ? color : "#333", border: `1px solid ${isActive ? color : "#2a2a2a"}`, padding: "4px 2px", fontFamily: "'Courier New', monospace", fontSize: "7px", cursor: "pointer", fontWeight: isActive ? "bold" : "normal" }}>{label}</button>;
                   })}
                 </div>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px" }}>
-                {[
-                  { l: "POUR TYPE", v: latest.bidForm?.pourType || "-" },
-                  { l: "SQUARE FT", v: latest.bidForm?.sqft ? `${latest.bidForm.sqft} SF` : "-" },
-                  { l: "THICKNESS", v: latest.bidForm?.thickness ? `${latest.bidForm.thickness}"` : "-" },
-                ].map(({ l, v }) => (
-                  <div key={l} style={{ background: "#111", padding: "5px 8px" }}>
-                    <div style={{ fontSize: "8px", letterSpacing: "1px", color: "#555", marginBottom: "2px" }}>{l}</div>
-                    <div style={{ fontSize: "10px", color: "#888" }}>{v}</div>
-                  </div>
-                ))}
+
+              <div style={{ display: "grid", gridTemplateColumns: origValue > 0 && hasCOs ? "1fr 1fr 1fr" : origValue > 0 ? "1fr 1fr" : "1fr", gap: "6px" }}>
+                {origValue > 0 && <div style={{ background: "#111", padding: "6px 8px" }}><div style={{ fontSize: "7px", color: "#444", marginBottom: "2px" }}>ORIGINAL BID</div><div style={{ fontSize: "12px", color: "#4caf50", fontWeight: "bold" }}>${origValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div></div>}
+                {hasCOs && coTotal > 0 && <div style={{ background: "#111", padding: "6px 8px" }}><div style={{ fontSize: "7px", color: "#444", marginBottom: "2px" }}>CO TOTAL</div><div style={{ fontSize: "12px", color: "#e53935", fontWeight: "bold" }}>+${coTotal.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div></div>}
+                {origValue > 0 && hasCOs && <div style={{ background: "#f5a62311", border: "1px solid #f5a62333", padding: "6px 8px" }}><div style={{ fontSize: "7px", color: "#f5a623", marginBottom: "2px" }}>RUNNING TOTAL</div><div style={{ fontSize: "13px", color: "#f5a623", fontWeight: "bold" }}>${(origValue + coTotal).toLocaleString("en-US", { maximumFractionDigits: 0 })}</div></div>}
               </div>
             </div>
 
-            {/* Revision history — expanded */}
             {isExpanded && (
-              <div style={{ padding: "8px 12px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555", marginBottom: "8px" }}>ALL REVISIONS</div>
-                {revisions.map(rev => (
-                  <div key={rev.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: "4px", background: "#111", border: "1px solid #1a1a1a" }}>
-                    <div>
-                      <span style={{ background: rev.version === latest.version ? "#f5a62322" : "#1a1a1a", color: rev.version === latest.version ? "#f5a623" : "#666", border: `1px solid ${rev.version === latest.version ? "#f5a62344" : "#2a2a2a"}`, borderRadius: "4px", padding: "1px 6px", fontSize: "9px", marginRight: "8px" }}>
-                        v{rev.version || 1}
-                      </span>
-                      <span style={{ color: "#666", fontSize: "10px" }}>{rev.savedAt}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      <button onClick={() => onLoad(rev)} style={{ background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "4px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>LOAD</button>
-                      <button onClick={() => onDelete(rev.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "4px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
-                    </div>
-                  </div>
-                ))}
+              <div style={{ padding: "10px 14px", borderTop: "1px solid #1a1a1a" }}>
+                {group.bids.length > 0 && (
+                  <>
+                    <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555", marginBottom: "8px" }}>BID REVISIONS</div>
+                    {group.bids.map(bid => (
+                      <div key={bid.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", marginBottom: "4px", background: "#111", border: "1px solid #1a1a1a" }}>
+                        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                          <span style={{ background: bid.id === group.bids[0].id ? "#f5a62322" : "#1a1a1a", color: bid.id === group.bids[0].id ? "#f5a623" : "#666", border: `1px solid ${bid.id === group.bids[0].id ? "#f5a62344" : "#2a2a2a"}`, borderRadius: "4px", padding: "1px 6px", fontSize: "9px" }}>v{bid.version || 1}</span>
+                          <span style={{ color: "#666", fontSize: "10px" }}>{bid.savedAt}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <button onClick={() => onLoad(bid)} style={{ background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>LOAD</button>
+                          <button onClick={() => onDelete(bid.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393544", padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {group.cos.length > 0 && (
+                  <>
+                    <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#e53935", marginBottom: "8px", marginTop: "12px" }}>CHANGE ORDERS</div>
+                    {group.cos.map((co, i) => (
+                      <div key={co.id} style={{ padding: "8px 10px", marginBottom: "4px", background: "#1a0d0d", border: "1px solid #e5393522" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <span style={{ color: "#e53935", fontSize: "10px", fontWeight: "bold" }}>CO-{String(i + 1).padStart(2, "0")}</span>
+                            <span style={{ color: "#666", fontSize: "10px", marginLeft: "10px" }}>{co.savedAt}</span>
+                          </div>
+                          <button onClick={() => onDelete(co.id)} style={{ background: "transparent", color: "#e53935", border: "1px solid #e5393533", padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>DEL</button>
+                        </div>
+                        {co.coForm?.description && <div style={{ fontSize: "10px", color: "#888", marginTop: "4px" }}>{co.coForm.description.slice(0, 80)}{co.coForm.description.length > 80 ? "..." : ""}</div>}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -381,6 +396,7 @@ function JobHistoryPanel({ jobs, onLoad, onDelete, onStatusChange }) {
     </div>
   );
 }
+
 
 // ── PDF Export (Blob download — no popup blocker) ──────────────────
 function exportMaterialList(address, bidForm, bidOutput, brand = {}, jobInfo = {}, prices = {}) {
@@ -536,7 +552,7 @@ function exportToPDF(address, bidForm, bidOutput, brand = {}, jobInfo = {}) {
   })();
   const filename = `BidProposal_${(jobInfo.projectName || address || "Project").replace(/[^a-z0-9]/gi, "_").slice(0, 30)}_${new Date().toISOString().slice(0,10)}.html`;
   const coName = brand.companyName || "CONCRETE CONTRACTOR";
-  const bidNumber = jobInfo.bidNumber || `BID-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+  const bidNumber = jobInfo.jobNumber || jobInfo.bidNumber || `JOB-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
 
   // Parse total bid value from output
   const totalMatch = bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
@@ -851,8 +867,18 @@ export default function ConcreteIntelTool() {
   const [editingPriceKey, setEditingPriceKey] = useState(null);
 
   const [jobInfo, setJobInfo] = useState({
-    clientName: "", gcName: "", projectName: "", bidNumber: "", bidExpiry: "", poNumber: "", notes: "",
+    clientName: "", gcName: "", projectName: "", jobNumber: "", bidExpiry: "", poNumber: "", notes: "",
   });
+
+  const generateJobNumber = (existingJobs) => {
+    const year = new Date().getFullYear();
+    const nums = existingJobs
+      .map(j => j.jobInfo?.jobNumber)
+      .filter(n => n && n.startsWith(`JOB-${year}-`))
+      .map(n => parseInt(n.split("-")[2]) || 0);
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `JOB-${year}-${String(next).padStart(3, "0")}`;
+  };
 
   const [bidForm, setBidForm] = useState({
     pourType: "slab-on-grade", sqft: "", thickness: "4", psi: "3000",
@@ -867,6 +893,7 @@ export default function ConcreteIntelTool() {
   // Change order state
   const [coForm, setCoForm] = useState({
     description: "", reason: "", scopeChanges: "", scheduleImpact: "",
+    linkedJobNumber: "",
     // Cost calculator
     addedSF: "", addedThickness: "4", rebarType: "none", addedLaborHours: "", addedLaborRole: "laborer",
     equipmentDays: "", equipmentType: "pump_truck",
@@ -899,9 +926,16 @@ export default function ConcreteIntelTool() {
   // ── Persistent Storage (window.storage API) ──────────────────────
   const loadJobsFromStorage = async () => {
     try {
-      const keys = await window.storage.list("job:");
+      const jobKeys = await window.storage.list("job:");
+      const coKeys = await window.storage.list("co:");
       const loaded = [];
-      for (const key of (keys?.keys || [])) {
+      for (const key of (jobKeys?.keys || [])) {
+        try {
+          const res = await window.storage.get(key);
+          if (res?.value) loaded.push(JSON.parse(res.value));
+        } catch {}
+      }
+      for (const key of (coKeys?.keys || [])) {
         try {
           const res = await window.storage.get(key);
           if (res?.value) loaded.push(JSON.parse(res.value));
@@ -1026,6 +1060,24 @@ export default function ConcreteIntelTool() {
       await loadJobsFromStorage();
     } catch {
       setJobs(prev => prev.filter(j => j.id !== id));
+    }
+  };
+
+  const saveChangeOrder = async (coOutput, linkedJobNumber) => {
+    if (!coOutput || !linkedJobNumber) return;
+    const co = {
+      id: Date.now(),
+      type: "change_order",
+      linkedJobNumber,
+      coOutput,
+      coForm: { ...coForm },
+      savedAt: new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+    };
+    try {
+      await window.storage.set(`co:${co.id}`, JSON.stringify(co));
+      await loadJobsFromStorage();
+    } catch {
+      setJobs(prev => [co, ...prev]);
     }
   };
 
@@ -1822,7 +1874,12 @@ Our Company: ${brand.companyName || "Not specified"}`;
               </div>
 
               {/* Job / Client Info */}
-              <button onClick={() => setShowJobInfo(!showJobInfo)} style={{
+              <button onClick={() => {
+                if (!showJobInfo && !jobInfo.jobNumber) {
+                  setJobInfo(prev => ({ ...prev, jobNumber: generateJobNumber(jobs) }));
+                }
+                setShowJobInfo(!showJobInfo);
+              }} style={{
                 width: "100%", background: showJobInfo ? "#1a1a2a" : "transparent", color: showJobInfo ? "#ff9800" : "#555",
                 border: `1px solid ${showJobInfo ? "#ff9800" : "#333"}`, padding: "8px",
                 fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer", marginBottom: showJobInfo ? "10px" : "0",
@@ -1854,7 +1911,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                     { key: "projectName", label: "PROJECT NAME", placeholder: "Main St. Warehouse Slab" },
                     { key: "clientName", label: "CLIENT NAME", placeholder: "Acme Properties LLC" },
                     { key: "gcName", label: "GENERAL CONTRACTOR", placeholder: "BuildRight Construction" },
-                    { key: "bidNumber", label: "BID NUMBER", placeholder: "BID-2025-047" },
+                    { key: "jobNumber", label: "JOB NUMBER", placeholder: "JOB-2025-001" },
                     { key: "poNumber", label: "PO / CONTRACT #", placeholder: "PO-88432" },
                     { key: "bidExpiry", label: "BID EXPIRY DATE", placeholder: "30 days from date" },
                   ].map(({ key, label, placeholder }) => (
@@ -1881,6 +1938,45 @@ Our Company: ${brand.companyName || "Not specified"}`;
           {phase === 2 && (
             <>
               <SectionLabel>CHANGE ORDER DETAILS</SectionLabel>
+
+              {/* Job number selector */}
+              <div style={{ marginBottom: "14px" }}>
+                <label style={labelStyle}>REFERENCE JOB NUMBER *</label>
+                {(() => {
+                  const savedJobs = jobs.filter(j => j.type !== "change_order" && j.jobInfo?.jobNumber);
+                  const uniqueJobs = [];
+                  const seen = new Set();
+                  savedJobs.forEach(j => {
+                    if (!seen.has(j.jobInfo.jobNumber)) {
+                      seen.add(j.jobInfo.jobNumber);
+                      uniqueJobs.push(j);
+                    }
+                  });
+                  return uniqueJobs.length > 0 ? (
+                    <select style={inputStyle} value={coForm.linkedJobNumber} onChange={e => {
+                      const selected = uniqueJobs.find(j => j.jobInfo.jobNumber === e.target.value);
+                      if (selected) {
+                        loadJob(selected);
+                        setCoForm(prev => ({ ...prev, linkedJobNumber: e.target.value }));
+                        setPhase(2);
+                      } else {
+                        setCoForm(prev => ({ ...prev, linkedJobNumber: e.target.value }));
+                      }
+                    }}>
+                      <option value="">— Select Job —</option>
+                      {uniqueJobs.map(j => (
+                        <option key={j.id} value={j.jobInfo.jobNumber}>
+                          {j.jobInfo.jobNumber} — {j.jobInfo.projectName || j.address || "No name"}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input style={inputStyle} placeholder="JOB-2025-001"
+                      value={coForm.linkedJobNumber}
+                      onChange={e => setCoForm({ ...coForm, linkedJobNumber: e.target.value })} />
+                  );
+                })()}
+              </div>
 
               {/* Original contract value — auto-pulled from loaded bid */}
               {(() => {
@@ -2580,21 +2676,25 @@ ${brand.email || ""}`;
               {coOutput ? (
                 <>
                   <OutputPanel content={coOutput} title="CHANGE ORDER — BOTH PARTIES MUST SIGN BEFORE WORK BEGINS" />
-                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
                     <button onClick={exportChangeOrder} style={{
                       background: "#1a0d0d", color: "#e53935", border: "1px solid #e5393544",
                       padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
-                    }}>⬇ EXPORT CHANGE ORDER</button>
-                    <button onClick={() => { setCoOutput(""); setCoStatus({ text: "AWAITING INPUT", type: "idle" }); setCoForm({ description: "", reason: "", scopeChanges: "", scheduleImpact: "", addedSF: "", addedThickness: "4", rebarType: "none", addedLaborHours: "", addedLaborRole: "laborer", equipmentDays: "", equipmentType: "pump_truck", manualOverride: false, manualCostImpact: "" }); }} style={{
+                    }}>⬇ EXPORT CO</button>
+                    <button onClick={() => saveChangeOrder(coOutput, coForm.linkedJobNumber || jobInfo.jobNumber)} style={{
+                      background: "#0d1a0d", color: "#4caf50", border: "1px solid #4caf5044",
+                      padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
+                    }}>💾 SAVE TO JOB {coForm.linkedJobNumber || jobInfo.jobNumber || ""}</button>
+                    <button onClick={() => { setCoOutput(""); setCoStatus({ text: "AWAITING INPUT", type: "idle" }); setCoForm({ description: "", reason: "", scopeChanges: "", scheduleImpact: "", linkedJobNumber: "", addedSF: "", addedThickness: "4", rebarType: "none", addedLaborHours: "", addedLaborRole: "laborer", equipmentDays: "", equipmentType: "pump_truck", manualOverride: false, manualCostImpact: "" }); }} style={{
                       background: "transparent", color: "#555", border: "1px solid #333",
                       padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
-                    }}>↺ NEW CHANGE ORDER</button>
+                    }}>↺ NEW CO</button>
                   </div>
                 </>
               ) : (
                 <div style={{ height: "380px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
                   <div style={{ fontSize: "30px", marginBottom: "12px" }}>📋</div>
-                  <div style={{ fontSize: "11px", letterSpacing: "2px" }}>FILL FORM → GENERATE CHANGE ORDER</div>
+                  <div style={{ fontSize: "11px", letterSpacing: "2px" }}>SELECT JOB → FILL FORM → GENERATE CO</div>
                 </div>
               )}
             </>
