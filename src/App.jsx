@@ -1552,80 +1552,45 @@ Our Company: ${brand.companyName || "Not specified"}`;
           .right-panel { min-height: 50vh; }
           .tab-bar { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
           .tab-bar button { padding: 11px 14px !important; font-size: 9px !important; flex-shrink: 0; }
-          .header-bar { padding: 12px 16px !important; }
-          .header-bar .co-name { font-size: 14px !important; }
-          .address-bar { padding: 10px 16px !important; }
+          .header-bar { padding: 10px 16px !important; }
           .form-grid-2 { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
       {/* Header */}
-      <div className="header-bar" style={{ background: "#111", borderBottom: "2px solid #f5a623", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#f5a623", marginBottom: "2px" }}>
-            {brand.companyName ? brand.companyName.toUpperCase() : "CONCRETE SITE INTELLIGENCE"}
-          </div>
-          <div style={{ fontSize: "18px", fontWeight: "bold", letterSpacing: "1px" }}>
-            {brand.companyName ? "FIELD OPS PLATFORM" : "FIELD OPS PLATFORM"}
-            <span style={{ fontSize: "10px", color: "#f5a623", letterSpacing: "2px", marginLeft: "8px" }}>v2.0</span>
-          </div>
-          {brand.licenseNumber && <div style={{ fontSize: "10px", color: "#555", letterSpacing: "1px", marginTop: "2px" }}>LIC# {brand.licenseNumber}</div>}
-        </div>
-        <div style={{ fontSize: "10px", color: "#555", textAlign: "right", letterSpacing: "1px" }}>
-          {brand.phone && <div style={{ color: "#888", marginBottom: "2px" }}>{brand.phone}</div>}
-          <div>POWERED BY CLAUDE AI</div>
-          <div style={{ color: "#4caf50", marginTop: "2px" }}>● LIVE</div>
-          <div style={{ color: "#2196f3", marginTop: "2px", fontSize: "9px" }}>{jobs.length} SAVED JOB{jobs.length !== 1 ? "S" : ""}</div>
-        </div>
-      </div>
-
-      {/* Address Bar */}
-      <div className="address-bar" style={{ background: "#111", padding: "10px 24px", borderBottom: "1px solid #1e1e1e", position: "relative", zIndex: 100 }}>
-        <div style={{ position: "relative" }}>
-          <input
-            style={{ ...inputStyle, fontSize: "14px", padding: "10px 14px" }}
-            placeholder="ENTER JOB SITE ADDRESS..."
-            value={address}
-            onChange={e => {
-              const val = e.target.value;
-              setAddress(val);
-              clearTimeout(addressDebounce.current);
-              addressDebounce.current = setTimeout(() => fetchSuggestions(val), 350);
-            }}
-            onKeyDown={e => { if (e.key === "Escape") setShowSuggestions(false); }}
-            onFocus={() => suggestions.length && setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            autoComplete="off"
-          />
-          {showSuggestions && suggestions.length > 0 && (
-            <div ref={suggestionsRef} style={{
-              position: "absolute", top: "100%", left: 0, right: 0,
-              background: "#1a1a1a", border: "1px solid #f5a623", borderTop: "none",
-              zIndex: 200, maxHeight: "220px", overflowY: "auto",
-            }}>
-              {suggestions.map((s, i) => (
-                <div key={i}
-                  onMouseDown={() => { setAddress(s); setSuggestions([]); setShowSuggestions(false); }}
-                  style={{ padding: "10px 14px", fontSize: "12px", color: "#c8bfa8", fontFamily: "'Courier New', monospace", cursor: "pointer", borderBottom: "1px solid #2a2a2a", lineHeight: "1.4" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  📍 {s}
-                </div>
-              ))}
+      <div className="header-bar" style={{ background: "#111", borderBottom: "2px solid #f5a623", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div>
+            <div style={{ fontSize: "17px", fontWeight: "bold", letterSpacing: "1px", color: "#fff" }}>
+              {brand.companyName || "CONCRETE FIELD OPS"}
             </div>
-          )}
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#f5a623", marginTop: "2px" }}>
+              {brand.licenseNumber ? `LIC# ${brand.licenseNumber}` : "POWERED BY CLAUDE AI"}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {brand.phone && <div style={{ fontSize: "11px", color: "#666" }}>{brand.phone}</div>}
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "10px", color: "#4caf50", letterSpacing: "1px" }}>● LIVE</div>
+            <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{jobs.length} JOB{jobs.length !== 1 ? "S" : ""} SAVED</div>
+          </div>
+          <button onClick={() => setPhase(5)} style={{ background: "transparent", border: "1px solid #333", color: "#555", padding: "6px 12px", fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer" }}>
+            ⚙ SETTINGS
+          </button>
         </div>
       </div>
 
       {/* Phase Tabs */}
-      <div className="tab-bar" style={{ display: "flex", borderBottom: "1px solid #1e1e1e", background: "#0d0d0d", overflowX: "auto" }}>
+      <div className="tab-bar" style={{ display: "flex", borderBottom: "2px solid #1a1a1a", background: "#0d0d0d", overflowX: "auto" }}>
         {PHASES.map((p, i) => (
           <button key={p} onClick={() => setPhase(i)} style={{
-            background: phase === i ? "#1a1a1a" : "transparent",
-            color: phase === i ? "#f5a623" : "#555",
+            background: phase === i ? "#111" : "transparent",
+            color: phase === i ? "#f5a623" : "#444",
             border: "none", borderBottom: phase === i ? "2px solid #f5a623" : "2px solid transparent",
-            padding: "12px 20px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            padding: "13px 22px", fontFamily: "'Courier New', monospace", fontSize: "10px",
+            letterSpacing: "2px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            transition: "all 0.15s",
           }}>{p}{p === "JOB HISTORY" && jobs.length > 0 && <span style={{ marginLeft: "6px", background: "#f5a623", color: "#000", borderRadius: "8px", padding: "1px 6px", fontSize: "9px" }}>{jobs.length}</span>}</button>
         ))}
       </div>
@@ -1712,6 +1677,41 @@ Our Company: ${brand.companyName || "Not specified"}`;
           {phase === 1 && (
             <>
               <SectionLabel>POUR SPECIFICATIONS</SectionLabel>
+
+              {/* Job site address with autocomplete */}
+              <div style={{ marginBottom: "14px", position: "relative" }}>
+                <label style={labelStyle}>JOB SITE ADDRESS</label>
+                <input
+                  style={inputStyle}
+                  placeholder="123 Main St, City, State..."
+                  value={address}
+                  autoComplete="off"
+                  onChange={e => {
+                    const val = e.target.value;
+                    setAddress(val);
+                    clearTimeout(addressDebounce.current);
+                    addressDebounce.current = setTimeout(() => fetchSuggestions(val), 350);
+                  }}
+                  onKeyDown={e => { if (e.key === "Escape") setShowSuggestions(false); }}
+                  onFocus={() => suggestions.length && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
+                    background: "#1a1a1a", border: "1px solid #f5a623", borderTop: "none", maxHeight: "200px", overflowY: "auto",
+                  }}>
+                    {suggestions.map((s, i) => (
+                      <div key={i}
+                        onMouseDown={() => { setAddress(s); setSuggestions([]); setShowSuggestions(false); }}
+                        style={{ padding: "9px 12px", fontSize: "11px", color: "#c8bfa8", cursor: "pointer", borderBottom: "1px solid #2a2a2a" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      >📍 {s}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>POUR TYPE</label>
                 <select style={inputStyle} value={bidForm.pourType} onChange={e => setBidForm({ ...bidForm, pourType: e.target.value })}>
