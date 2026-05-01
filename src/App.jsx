@@ -61,6 +61,68 @@ const labelStyle = {
   display: "block",
 };
 
+function CloseoutPanel({ job, onSave, labelStyle, inputStyle }) {
+  const co = job.closeout || {};
+  const bidMatch = job.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+  const bidVal = bidMatch ? parseFloat(bidMatch[1].replace(/,/g, "")) : 0;
+  const revenue = parseFloat(co.actualRevenue || bidVal || 0);
+  const cost = parseFloat(co.actualCost || 0);
+  const profit = revenue - cost;
+  const margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : null;
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ actualRevenue: co.actualRevenue || "", actualCost: co.actualCost || "", costNotes: co.costNotes || "" });
+
+  return (
+    <div style={{ marginTop: "10px", background: "#0d1a0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "10px 12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50" }}>JOB CLOSE-OUT</div>
+        <button onClick={() => setEditing(!editing)} style={{ background: "transparent", color: "#4caf50", border: "1px solid #4caf5044", padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>
+          {editing ? "CANCEL" : "ENTER ACTUALS"}
+        </button>
+      </div>
+      {editing ? (
+        <div>
+          <div style={{ marginBottom: "8px" }}>
+            <label style={{ ...labelStyle, fontSize: "9px" }}>ACTUAL REVENUE ($)</label>
+            <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder={bidVal || "0"}
+              value={form.actualRevenue} onChange={e => setForm({ ...form, actualRevenue: e.target.value })} />
+          </div>
+          <div style={{ marginBottom: "8px" }}>
+            <label style={{ ...labelStyle, fontSize: "9px" }}>ACTUAL COST ($)</label>
+            <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="Total materials + labor + equipment"
+              value={form.actualCost} onChange={e => setForm({ ...form, actualCost: e.target.value })} />
+          </div>
+          <div style={{ marginBottom: "10px" }}>
+            <label style={{ ...labelStyle, fontSize: "9px" }}>NOTES</label>
+            <input style={inputStyle} placeholder="What drove cost over/under? Lessons learned..."
+              value={form.costNotes} onChange={e => setForm({ ...form, costNotes: e.target.value })} />
+          </div>
+          <button onClick={() => { onSave(job.id, form); setEditing(false); }} style={{
+            width: "100%", background: "#4caf50", color: "#000", border: "none", padding: "8px",
+            fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer",
+          }}>✓ SAVE CLOSE-OUT</button>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+          <div style={{ background: "#111", padding: "6px 8px" }}>
+            <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>REVENUE</div>
+            <div style={{ fontSize: "11px", color: "#f0ece0", fontWeight: "bold" }}>{revenue > 0 ? `$${revenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
+          </div>
+          <div style={{ background: "#111", padding: "6px 8px" }}>
+            <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>COST</div>
+            <div style={{ fontSize: "11px", color: "#e53935" }}>{cost > 0 ? `$${cost.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
+          </div>
+          <div style={{ background: profit > 0 ? "#0d1a0d" : "#1a0d0d", padding: "6px 8px", border: `1px solid ${profit > 0 ? "#4caf5033" : "#e5393533"}` }}>
+            <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>PROFIT {margin ? `(${margin}%)` : ""}</div>
+            <div style={{ fontSize: "11px", color: profit > 0 ? "#4caf50" : "#e53935", fontWeight: "bold" }}>{cost > 0 ? `$${profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
+          </div>
+        </div>
+      )}
+      {co.costNotes && !editing && <div style={{ fontSize: "9px", color: "#666", marginTop: "6px", fontStyle: "italic" }}>📝 {co.costNotes}</div>}
+    </div>
+  );
+}
+
 function SectionLabel({ children }) {
   return (
     <div style={{
@@ -2640,68 +2702,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                           <div style={{ fontSize: "9px", color: "#444", marginTop: "8px", letterSpacing: "0.5px" }}>Last updated: {job.savedAt}</div>
 
                           {/* Close-out panel — shows when WON */}
-                          {(job.status === "won") && (() => {
-                            const co = job.closeout || {};
-                            const bidMatch = job.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-                            const bidVal = bidMatch ? parseFloat(bidMatch[1].replace(/,/g, "")) : 0;
-                            const revenue = parseFloat(co.actualRevenue || bidVal || 0);
-                            const cost = parseFloat(co.actualCost || 0);
-                            const profit = revenue - cost;
-                            const margin = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : null;
-                            const [editing, setEditing] = React.useState(false);
-                            const [form, setForm] = React.useState({ actualRevenue: co.actualRevenue || "", actualCost: co.actualCost || "", costNotes: co.costNotes || "" });
-
-                            return (
-                              <div style={{ marginTop: "10px", background: "#0d1a0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "10px 12px" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                  <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50" }}>JOB CLOSE-OUT</div>
-                                  <button onClick={() => setEditing(!editing)} style={{ background: "transparent", color: "#4caf50", border: "1px solid #4caf5044", padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>
-                                    {editing ? "CANCEL" : "ENTER ACTUALS"}
-                                  </button>
-                                </div>
-
-                                {editing ? (
-                                  <div>
-                                    <div style={{ marginBottom: "8px" }}>
-                                      <label style={{ ...labelStyle, fontSize: "9px" }}>ACTUAL REVENUE ($)</label>
-                                      <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder={bidVal || "0"}
-                                        value={form.actualRevenue} onChange={e => setForm({ ...form, actualRevenue: e.target.value })} />
-                                    </div>
-                                    <div style={{ marginBottom: "8px" }}>
-                                      <label style={{ ...labelStyle, fontSize: "9px" }}>ACTUAL COST ($)</label>
-                                      <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="Total materials + labor + equipment"
-                                        value={form.actualCost} onChange={e => setForm({ ...form, actualCost: e.target.value })} />
-                                    </div>
-                                    <div style={{ marginBottom: "10px" }}>
-                                      <label style={{ ...labelStyle, fontSize: "9px" }}>NOTES</label>
-                                      <input style={inputStyle} placeholder="What drove cost over/under? Lessons learned..."
-                                        value={form.costNotes} onChange={e => setForm({ ...form, costNotes: e.target.value })} />
-                                    </div>
-                                    <button onClick={() => { updateJobCloseout(job.id, form); setEditing(false); }} style={{
-                                      width: "100%", background: "#4caf50", color: "#000", border: "none", padding: "8px",
-                                      fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer",
-                                    }}>✓ SAVE CLOSE-OUT</button>
-                                  </div>
-                                ) : (
-                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
-                                    <div style={{ background: "#111", padding: "6px 8px" }}>
-                                      <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>REVENUE</div>
-                                      <div style={{ fontSize: "11px", color: "#f0ece0", fontWeight: "bold" }}>{revenue > 0 ? `$${revenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
-                                    </div>
-                                    <div style={{ background: "#111", padding: "6px 8px" }}>
-                                      <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>COST</div>
-                                      <div style={{ fontSize: "11px", color: "#e53935" }}>{cost > 0 ? `$${cost.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
-                                    </div>
-                                    <div style={{ background: profit > 0 ? "#0d1a0d" : "#1a0d0d", padding: "6px 8px", border: `1px solid ${profit > 0 ? "#4caf5033" : "#e5393533"}` }}>
-                                      <div style={{ fontSize: "7px", color: "#555", marginBottom: "2px" }}>PROFIT {margin ? `(${margin}%)` : ""}</div>
-                                      <div style={{ fontSize: "11px", color: profit > 0 ? "#4caf50" : "#e53935", fontWeight: "bold" }}>{cost > 0 ? `$${profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</div>
-                                    </div>
-                                  </div>
-                                )}
-                                {co.costNotes && !editing && <div style={{ fontSize: "9px", color: "#666", marginTop: "6px", fontStyle: "italic" }}>📝 {co.costNotes}</div>}
-                              </div>
-                            );
-                          })()}
+                          {(job.status === "won") && <CloseoutPanel job={job} onSave={updateJobCloseout} labelStyle={labelStyle} inputStyle={inputStyle} />}
                         </div>
                       );
                     })}
