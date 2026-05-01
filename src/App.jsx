@@ -383,6 +383,151 @@ function JobHistoryPanel({ jobs, onLoad, onDelete, onStatusChange }) {
 }
 
 // ── PDF Export (Blob download — no popup blocker) ──────────────────
+function exportMaterialList(address, bidForm, bidOutput, brand = {}, jobInfo = {}, prices = {}) {
+  const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const filename = `MaterialList_${(jobInfo.projectName || address || "Project").replace(/[^a-z0-9]/gi, "_").slice(0, 30)}_${new Date().toISOString().slice(0,10)}.html`;
+  const coName = brand.companyName || "CONCRETE CONTRACTOR";
+  const sf = parseFloat(bidForm.sqft) || 0;
+  const tk = parseFloat(bidForm.thickness) || 4;
+  const cy = sf > 0 ? ((sf * (tk / 12)) / 27 * 1.05) : 0;
+  const psiKey = `concrete_${bidForm.psi}`;
+  const concreteItem = prices[psiKey] || { label: `Ready-Mix ${bidForm.psi} PSI`, price: 0, unit: "CY" };
+
+  // Build material rows
+  const rows = [];
+  if (cy > 0) rows.push({ category: "CONCRETE", item: concreteItem.label, qty: `${cy.toFixed(1)} CY`, unit: "CY", note: "Include 5% waste — verify with supplier" });
+
+  // Rebar
+  const rebarItem = prices[bidForm.rebar];
+  if (rebarItem && bidForm.rebar !== "none") {
+    if (rebarItem.unit === "SF") {
+      rows.push({ category: "REINFORCEMENT", item: rebarItem.label, qty: `${sf} SF`, unit: "SF", note: "" });
+    } else {
+      const lbPerSF = bidForm.rebar?.includes("5") ? 0.85 : 0.55;
+      const lb = (sf * lbPerSF).toFixed(0);
+      const lf = Math.round(sf * lbPerSF / 2.67); // approx LF for #4 rebar
+      rows.push({ category: "REINFORCEMENT", item: rebarItem.label, qty: `${lb} LB (~${lf} LF)`, unit: "LB", note: "Verify spacing with structural drawings" });
+    }
+  }
+
+  // Standard materials
+  const materialItems = [
+    { key: "vapor_barrier", qty: () => `${sf} SF`, note: "6-mil poly — overlap seams 12\"" },
+    { key: "curing_compound", qty: () => `${(sf / 200).toFixed(0)} GAL`, note: "1 gal per ~200 SF" },
+    { key: "form_lumber", qty: () => `${Math.ceil(Math.sqrt(sf) * 4)} LF`, note: "Perimeter estimate — adjust for layout" },
+    { key: "expansion_joint", qty: () => `${Math.ceil(Math.sqrt(sf) * 2)} LF`, note: "Every 10-12 ft in each direction" },
+    { key: "concrete_sealer", qty: () => `${(sf / 200).toFixed(0)} GAL`, note: "Apply after cure — 1 gal per ~200 SF" },
+  ];
+
+  materialItems.forEach(({ key, qty, note }) => {
+    if (prices[key]) rows.push({ category: "MATERIALS", item: prices[key].label, qty: qty(), unit: prices[key].unit, note });
+  });
+
+  // Equipment
+  if (bidForm.accessDifficulty === "pump-required" && prices.pump_truck) {
+    rows.push({ category: "EQUIPMENT", item: prices.pump_truck.label, qty: "1 DAY", unit: "DAY", note: "Reserve 48hrs in advance" });
+  }
+
+  const byCategory = {};
+  rows.forEach(r => { if (!byCategory[r.category]) byCategory[r.category] = []; byCategory[r.category].push(r); });
+  const catColors = { CONCRETE: "#f5a623", REINFORCEMENT: "#2196f3", MATERIALS: "#4caf50", EQUIPMENT: "#9c27b0" };
+
+  const tableRows = rows.map((r, i) => `
+    <tr style="background:${i % 2 === 0 ? "#fff" : "#f9f9f9"}">
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:10px;letter-spacing:1px;color:${catColors[r.category] || "#666"};font-weight:bold">${r.category}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:11px;font-weight:bold">${r.item}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;font-weight:bold;font-family:'Courier New',monospace;color:#1a1a1a">${r.qty}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:10px;color:#999;font-style:italic">${r.note}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center"><input type="checkbox" style="width:16px;height:16px"></td>
+    </tr>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Material List — ${coName}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,sans-serif; color:#222; }
+  .header { background:#1a1a1a; color:#fff; padding:28px 40px; display:flex; justify-content:space-between; align-items:flex-start; }
+  .co-name { font-size:20px; font-weight:bold; margin-bottom:3px; }
+  .doc-type { font-size:10px; letter-spacing:3px; color:#f5a623; text-transform:uppercase; }
+  .doc-info { text-align:right; font-size:10px; color:#aaa; line-height:1.8; }
+  .accent { height:4px; background:#f5a623; }
+  .body { padding:32px 40px; }
+  .project-bar { background:#f5f5f5; border-left:4px solid #f5a623; padding:12px 20px; margin-bottom:24px; display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  .project-bar .item label { font-size:8px; letter-spacing:2px; color:#999; display:block; margin-bottom:3px; text-transform:uppercase; }
+  .project-bar .item span { font-size:12px; font-weight:bold; }
+  table { width:100%; border-collapse:collapse; margin-bottom:32px; }
+  th { background:#1a1a1a; color:#f5a623; padding:10px 12px; text-align:left; font-size:9px; letter-spacing:2px; text-transform:uppercase; }
+  .confirm-box { border:1px solid #ddd; padding:20px; margin-bottom:24px; }
+  .confirm-box h3 { font-size:9px; letter-spacing:2px; color:#f5a623; text-transform:uppercase; margin-bottom:12px; }
+  .confirm-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .confirm-field label { font-size:9px; color:#999; display:block; margin-bottom:4px; }
+  .confirm-field .line { border-bottom:1px solid #ccc; height:24px; }
+  .footer { background:#f0f0f0; padding:10px 40px; display:flex; justify-content:space-between; font-size:8px; color:#999; letter-spacing:1px; text-transform:uppercase; margin-top:24px; }
+  @media print { @page { margin:0.6in; } }
+</style></head><body>
+
+<div class="header">
+  <div>
+    <div class="co-name">${coName}</div>
+    <div class="doc-type">Material Takeoff &amp; Order List</div>
+  </div>
+  <div class="doc-info">
+    <div>${date}</div>
+    ${brand.phone ? `<div>${brand.phone}</div>` : ""}
+    ${brand.licenseNumber ? `<div>Lic# ${brand.licenseNumber}</div>` : ""}
+  </div>
+</div>
+<div class="accent"></div>
+
+<div class="body">
+  <div class="project-bar">
+    <div class="item"><label>Project</label><span>${jobInfo.projectName || address || "—"}</span></div>
+    <div class="item"><label>Pour Type</label><span>${bidForm.pourType || "—"}</span></div>
+    <div class="item"><label>Area</label><span>${sf > 0 ? sf + " SF" : "—"}</span></div>
+    <div class="item"><label>Concrete</label><span>${cy > 0 ? cy.toFixed(1) + " CY" : "—"}</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Item</th>
+        <th>Quantity to Order</th>
+        <th>Notes</th>
+        <th style="text-align:center;width:60px">✓ Ordered</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+
+  <div class="confirm-box">
+    <h3>Supplier Confirmation</h3>
+    <div class="confirm-grid">
+      <div class="confirm-field"><label>Supplier / Ready-Mix Co.</label><div class="line"></div></div>
+      <div class="confirm-field"><label>Contact Name</label><div class="line"></div></div>
+      <div class="confirm-field"><label>Pour Date Confirmed</label><div class="line"></div></div>
+      <div class="confirm-field"><label>Delivery Time</label><div class="line"></div></div>
+      <div class="confirm-field"><label>Confirmed By</label><div class="line"></div></div>
+      <div class="confirm-field"><label>Confirmation #</label><div class="line"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>${coName}</span>
+  <span>${jobInfo.projectName || address || "Project"} — Material List</span>
+  <span>${date}</span>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
 function exportToPDF(address, bidForm, bidOutput, brand = {}, jobInfo = {}) {
   const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const expiryDate = jobInfo.bidExpiry || (() => {
@@ -2179,12 +2324,18 @@ Our Company: ${brand.companyName || "Not specified"}`;
                   {showMarkup && <MarkupCalculator bidOutput={bidOutput} />}
 
                   {/* Action bar */}
-                  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
                     <button onClick={() => exportToPDF(address, bidForm, bidOutput, brand, jobInfo)} style={{
                       background: "#1a1a2a", color: "#7986cb", border: "1px solid #7986cb44",
                       padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
                     }}>
-                      ⬇ EXPORT PDF
+                      ⬇ BID PROPOSAL
+                    </button>
+                    <button onClick={() => exportMaterialList(address, bidForm, bidOutput, brand, jobInfo, prices)} style={{
+                      background: "#1a2a1a", color: "#4caf50", border: "1px solid #4caf5044",
+                      padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
+                    }}>
+                      📋 MATERIAL LIST
                     </button>
                     <button onClick={saveJob} style={{
                       background: "#0d1a0d", color: "#4caf50", border: "1px solid #4caf5044",
