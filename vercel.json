@@ -1,8 +1,10 @@
 {
+  "functions": {
+    "api/claude.js": { "runtime": "edge" },
+    "api/docx.js": { "runtime": "nodejs" },
+    "api/material-list.js": { "runtime": "nodejs" }
+  },
   "rewrites": [
-    { "source": "/api/claude", "destination": "/api/claude" },
-    { "source": "/api/docx", "destination": "/api/docx" },
-    { "source": "/api/material-list", "destination": "/api/material-list" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
 }
