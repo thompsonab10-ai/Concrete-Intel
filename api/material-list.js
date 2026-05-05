@@ -13,7 +13,7 @@ function rule() {
   return p([], { border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "F5A623", space: 1 } }, spacing: { before: 0, after: 120 } });
 }
 
-export default async function handler(req) {
+module.exports = async function handler(req) {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   const body = await req.json();
