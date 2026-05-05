@@ -1,64 +1,86 @@
-export const config = { runtime: 'edge' };
-
-const ALLOWED_ORIGINS = new Set([
-  'https://concrete-intel.vercel.app',
-  'http://localhost:5173',
-]);
-
-const ALLOWED_TASKS = new Set([
-  'bid', 'change_order', 'email_summary', 'scope_letter', 'as_built', 'material_list'
-]);
-
-function corsHeaders(origin) {
-  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : '';
-  return {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-}
-
-function json(body, status, origin) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: corsHeaders(origin),
-  });
-}
-
 export default async function handler(req) {
   const origin = req.headers.get('origin') || '';
 
+  const corsHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405, origin);
-  }
-
-  if (!ALLOWED_ORIGINS.has(origin) && !origin.includes('localhost')) {
-    return json({ error: 'Forbidden' }, 403, origin);
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: corsHeaders });
   }
 
   let body;
   try {
     body = await req.json();
   } catch {
-    return json({ error: 'Invalid JSON' }, 400, origin);
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: corsHeaders });
   }
 
-  // Validate — must have messages array, block arbitrary model/system overrides
   if (!body.messages || !Array.isArray(body.messages)) {
-    return json({ error: 'Invalid request' }, 400, origin);
+    return new Response(JSON.stringify({ error: 'Invalid request' }), { status: 400, headers: corsHeaders });
   }
 
-  // Strip any client-supplied fields that could abuse the API
   const safeBody = {
     model: 'claude-sonnet-4-20250514',
     max_tokens: Math.min(body.max_tokens || 2500, 3000),
     system: body.system || '',
-    messages: body.messages.slice(0, 10), // cap message count
+    messages: body.messages.slice(0, 10),
+  };
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(safeBody),
+    });
+
+    con
+cat > ~/concrete-intel/api/claude.js << 'EOF'
+export default async function handler(req) {
+  const origin = req.headers.get('origin') || '';
+
+  const corsHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: corsHeaders });
+  }
+
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: corsHeaders });
+  }
+
+  if (!body.messages || !Array.isArray(body.messages)) {
+    return new Response(JSON.stringify({ error: 'Invalid request' }), { status: 400, headers: corsHeaders });
+  }
+
+  const safeBody = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: Math.min(body.max_tokens || 2500, 3000),
+    system: body.system || '',
+    messages: body.messages.slice(0, 10),
   };
 
   try {
@@ -73,13 +95,8 @@ export default async function handler(req) {
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-      return json({ error: data.error?.message || 'AI request failed' }, response.status, origin);
-    }
-
-    return json(data, 200, origin);
+    return new Response(JSON.stringify(data), { status: response.status, headers: corsHeaders });
   } catch (err) {
-    return json({ error: 'Internal error' }, 500, origin);
+    return new Response(JSON.stringify({ error: 'Internal error' }), { status: 500, headers: corsHeaders });
   }
 }
