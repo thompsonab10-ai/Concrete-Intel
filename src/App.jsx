@@ -2828,17 +2828,53 @@ Our Company: ${brand.companyName || "Not specified"}`;
 
                   {/* Action bar */}
                   <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
-                    <button onClick={() => exportToPDF(address, bidForm, bidOutput, brand, jobInfo)} style={{
+                    <button onClick={async () => {
+                      try {
+                        const res = await fetch("/api/docx", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ address, bidForm, bidOutput, brand, jobInfo, estimate: calculateBidTotal(bidForm, prices) }),
+                        });
+                        if (!res.ok) throw new Error("Failed");
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `BidProposal_${(jobInfo.jobNumber || "BID").replace(/[^a-z0-9]/gi, "_")}.docx`;
+                        document.body.appendChild(a); a.click();
+                        document.body.removeChild(a); URL.revokeObjectURL(url);
+                      } catch (e) {
+                        alert("Export failed — check connection");
+                      }
+                    }} style={{
                       background: "#1a1a2a", color: "#7986cb", border: "1px solid #7986cb44",
                       padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
                     }}>
-                      ⬇ BID PROPOSAL
+                      ⬇ BID PROPOSAL (.docx)
                     </button>
-                    <button onClick={() => exportMaterialList(address, bidForm, bidOutput, brand, jobInfo, prices)} style={{
+                    <button onClick={async () => {
+                      try {
+                        const res = await fetch("/api/material-list", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ address, bidForm, bidOutput, brand, jobInfo, prices, estimate: calculateBidTotal(bidForm, prices) }),
+                        });
+                        if (!res.ok) throw new Error("Failed");
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `MaterialList_${(jobInfo.jobNumber || "JOB").replace(/[^a-z0-9]/gi, "_")}.docx`;
+                        document.body.appendChild(a); a.click();
+                        document.body.removeChild(a); URL.revokeObjectURL(url);
+                      } catch (e) {
+                        alert("Export failed — check connection");
+                      }
+                    }} style={{
                       background: "#1a2a1a", color: "#4caf50", border: "1px solid #4caf5044",
                       padding: "10px 16px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", flex: 1,
                     }}>
-                      📋 MATERIAL LIST
+                      📋 MATERIAL LIST (.docx)
                     </button>
                     <button onClick={saveJob} style={{
                       background: "#0d1a0d", color: "#4caf50", border: "1px solid #4caf5044",
