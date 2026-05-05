@@ -3,6 +3,66 @@ import { useState, useRef, useEffect } from "react";
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
 const PHASES = ["DASHBOARD", "BID ENGINE", "CHANGE ORDER", "JOB HISTORY", "PRICE BOOK", "SETTINGS", "HELP"];
 
+// ── Deterministic estimate engine ─────────────────────────────────────────
+// All dollar totals are calculated here, not parsed from AI text.
+function calculateBidTotal(bidForm, prices, markupState = {}) {
+  const P = prices || {};
+  const sf = parseFloat(bidForm?.sqft) || 0;
+  const tk = parseFloat(bidForm?.thickness) || 4;
+  const cy = sf > 0 ? (sf * (tk / 12)) / 27 * 1.05 : 0;
+
+  // Concrete
+  const psiKey = `concrete_${bidForm?.psi || "3000"}`;
+  const concreteRate = P[psiKey]?.price || P.concrete_3000?.price || 155;
+  const concreteCost = cy * concreteRate;
+
+  // Rebar
+  const rebarItem = P[bidForm?.rebar];
+  const rebarLbPerSF = bidForm?.rebar?.includes("5") ? 0.85 : 0.55;
+  const rebarCost = (!rebarItem || bidForm?.rebar === "none") ? 0
+    : rebarItem.unit === "SF" ? sf * rebarItem.price
+    : sf * rebarLbPerSF * rebarItem.price;
+
+  // Labor (placement + finishing)
+  const laborCost = sf * ((P.placement_labor?.price || 1.20) + (P.finishing_labor?.price || 2.85));
+
+  // Access surcharge
+  const accessSurcharge = bidForm?.accessDifficulty === "pump-required"
+    ? (P.pump_truck?.price || 1200) : bidForm?.accessDifficulty === "difficult" ? 350 : 0;
+
+  const directCost = concreteCost + rebarCost + laborCost + accessSurcharge;
+
+  // Markup
+  const ohPct = parseFloat(markupState?.overhead || 12) / 100;
+  const profitPct = parseFloat(markupState?.profit || 10) / 100;
+  const contingencyPct = parseFloat(markupState?.contingency || 0) / 100;
+
+  const overhead = directCost * ohPct;
+  const profit = (directCost + overhead) * profitPct;
+  const contingency = (directCost + overhead + profit) * contingencyPct;
+  const totalBid = directCost + overhead + profit + contingency;
+
+  return {
+    cy: parseFloat(cy.toFixed(2)),
+    directCost: Math.round(directCost),
+    concreteCost: Math.round(concreteCost),
+    rebarCost: Math.round(rebarCost),
+    laborCost: Math.round(laborCost),
+    accessSurcharge: Math.round(accessSurcharge),
+    overhead: Math.round(overhead),
+    profit: Math.round(profit),
+    contingency: Math.round(contingency),
+    totalBid: Math.round(totalBid),
+  };
+}
+
+// Helper to get total bid from a job — prefers stored estimate, falls back to regex
+function getJobBidTotal(job) {
+  if (job?.estimate?.totalBid) return job.estimate.totalBid;
+  const match = job?.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
+  return match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+}
+
 // ── Default prices — contractor overrides these in PRICE BOOK ────────
 const DEFAULT_PRICES = {
   // Concrete by PSI
@@ -63,8 +123,7 @@ const labelStyle = {
 
 function CloseoutPanel({ job, onSave, labelStyle, inputStyle }) {
   const co = job.closeout || {};
-  const bidMatch = job.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-  const bidVal = bidMatch ? parseFloat(bidMatch[1].replace(/,/g, "")) : 0;
+  const bidVal = getJobBidTotal(job);
   const revenue = parseFloat(co.actualRevenue || bidVal || 0);
   const cost = parseFloat(co.actualCost || 0);
   const profit = revenue - cost;
@@ -361,8 +420,7 @@ function JobHistoryPanel({ jobs, onLoad, onDelete, onStatusChange }) {
         const latest = group.bids[0];
         const isExpanded = expandedKey === jobNum;
         const hasCOs = group.cos.length > 0;
-        const origMatch = latest?.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-        const origValue = origMatch ? parseFloat(origMatch[1].replace(/,/g, "")) : 0;
+        const origValue = getJobBidTotal(latest);
         const coTotal = group.cos.reduce((sum, co) => {
           const m = co.coOutput?.match(/NET CHANGE[^$\d]*\$?([\d,]+)/i);
           return sum + (m ? parseFloat(m[1].replace(/,/g, "")) : 0);
@@ -1101,6 +1159,7 @@ export default function ConcreteIntelTool() {
       jobInfo: { ...jobInfo },
       bidForm: { ...bidForm },
       bidOutput,
+      estimate: calculateBidTotal(bidForm, prices),
       status: "draft",
       savedAt: new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
     };
@@ -1734,10 +1793,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
               {(() => {
                 const totalJobs = jobs.length;
                 const uniqueProjects = new Set(jobs.map(j => j.projectKey || j.id)).size;
-                const totalBidValue = jobs.reduce((sum, j) => {
-                  const match = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-                  return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
-                }, 0);
+                const totalBidValue = jobs.reduce((sum, j) => sum + getJobBidTotal(j), 0);
                 const avgBid = uniqueProjects > 0 ? totalBidValue / uniqueProjects : 0;
                 // Get latest revision per project for status
                 const latestByProject = {};
@@ -1749,10 +1805,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                 const wonCount = latestJobs.filter(j => j.status === "won").length;
                 const lostCount = latestJobs.filter(j => j.status === "lost").length;
                 const submittedCount = latestJobs.filter(j => j.status === "submitted").length;
-                const wonValue = jobs.filter(j => j.status === "won").reduce((sum, j) => {
-                  const match = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-                  return sum + (match ? parseFloat(match[1].replace(/,/g, "")) : 0);
-                }, 0);
+                const wonValue = jobs.filter(j => j.status === "won").reduce((sum, j) => sum + getJobBidTotal(j), 0);
                 return (
                   <div style={{ marginBottom: "16px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
@@ -2492,8 +2545,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                 const byPourType = {};
                 latest.forEach(j => {
                   const pt = j.bidForm?.pourType || "other";
-                  const match = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-                  const val = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+                  const val = getJobBidTotal(j);
                   if (!byPourType[pt]) byPourType[pt] = { count: 0, total: 0, won: 0 };
                   byPourType[pt].count++;
                   byPourType[pt].total += val;
@@ -2524,7 +2576,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                         <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>AVG BID SIZE</div>
                         <div style={{ fontSize: "18px", fontWeight: "bold", color: "#f5a623" }}>
                           {(() => {
-                            const vals = latest.map(j => { const m = j.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i); return m ? parseFloat(m[1].replace(/,/g, "")) : 0; }).filter(v => v > 0);
+                            const vals = latest.map(j => getJobBidTotal(j)).filter(v => v > 0);
                             const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
                             return avg > 0 ? `$${avg.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—";
                           })()}
@@ -2637,8 +2689,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
                 return (
                   <div>
                     {projectList.map(job => {
-                      const match = job.bidOutput?.match(/TOTAL\s+BID[^$\d]*\$?([\d,]+)/i);
-                      const bidValue = match ? parseFloat(match[1].replace(/,/g, "")) : null;
+                      const bidValue = getJobBidTotal(job) || null;
                       const revCount = allRevisions.filter(j => (j.projectKey || `legacy_${j.id}`) === (job.projectKey || `legacy_${job.id}`)).length;
 
                       // Expiry calculation — 30 days from save date, only for submitted bids
