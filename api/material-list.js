@@ -2,7 +2,6 @@ const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
         AlignmentType, HeadingLevel, BorderStyle, WidthType, ShadingType,
         VerticalAlign } = require("docx");
 
-export const config = { runtime: "nodejs18.x" };
 
 function p(children, opts = {}) {
   return new Paragraph({ children: Array.isArray(children) ? children : [children], ...opts });
