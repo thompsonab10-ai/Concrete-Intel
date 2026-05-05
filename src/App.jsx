@@ -1015,8 +1015,9 @@ export default function ConcreteIntelTool() {
     description: "", reason: "", scopeChanges: "", scheduleImpact: "",
     linkedJobNumber: "",
     // Cost calculator
-    addedSF: "", addedThickness: "4", rebarType: "none", addedLaborHours: "", addedLaborRole: "laborer",
-    equipmentDays: "", equipmentType: "pump_truck",
+    addedSF: "", addedThickness: "4", rebarType: "none",
+    laborItems: [{ role: "laborer", hours: "" }],
+    equipmentItems: [{ type: "pump_truck", days: "" }],
     manualOverride: false, manualCostImpact: "",
   });
   const [coOutput, setCoOutput] = useState("");
@@ -1531,8 +1532,12 @@ Estimated Cost Impact: ${coForm.manualOverride ? (coForm.manualCostImpact || "To
       const rebarCost = coForm.rebarType === "none" || !rebarItem ? 0
         : rebarItem.unit === "SF" ? sf * rebarItem.price
         : sf * rebarLbPerSF * rebarItem.price;
-      const laborCost = parseFloat(coForm.addedLaborHours || 0) * (P[coForm.addedLaborRole]?.price || P.laborer?.price || 42);
-      const equipCost = parseFloat(coForm.equipmentDays || 0) * (P[coForm.equipmentType]?.price || 0);
+      const laborCost = (coForm.laborItems || []).reduce((sum, item) => {
+        return sum + parseFloat(item.hours || 0) * (P[item.role]?.price || P.laborer?.price || 42);
+      }, 0);
+      const equipCost = (coForm.equipmentItems || []).reduce((sum, item) => {
+        return sum + parseFloat(item.days || 0) * (P[item.type]?.price || 0);
+      }, 0);
       const sfCost = sf * ((P.placement_labor?.price || 1.20) + (P.finishing_labor?.price || 2.85));
       const subtotal = concreteCost + rebarCost + sfCost + laborCost + equipCost;
       const total = subtotal * 1.12 * 1.10;
@@ -1836,20 +1841,6 @@ Our Company: ${brand.companyName || "Not specified"}`;
                 );
               })()}
 
-              <SectionLabel>QUICK ACTIONS</SectionLabel>
-              {[
-                { label: "▶ NEW BID", action: () => setPhase(1), color: "#f5a623", bg: "#1a1400" },
-                { label: "📋 CHANGE ORDER", action: () => setPhase(2), color: "#e53935", bg: "#1a0d0d" },
-                { label: "📂 JOB HISTORY", action: () => setPhase(3), color: "#2196f3", bg: "#0d0d1a" },
-                { label: "💲 PRICE BOOK", action: () => setPhase(4), color: "#4caf50", bg: "#0d1a0d" },
-              ].map(({ label, action, color, bg }) => (
-                <button key={label} onClick={action} style={{
-                  width: "100%", background: bg, color, border: `1px solid ${color}44`,
-                  padding: "12px", fontFamily: "'Courier New', monospace", fontSize: "11px",
-                  letterSpacing: "2px", cursor: "pointer", marginBottom: "6px", textAlign: "left",
-                }}>{label}</button>
-              ))}
-
               {/* Profit summary — only shows when closed jobs have actuals */}
               {(() => {
                 const closedJobs = jobs.filter(j => j.status === "won" && j.closeout?.actualCost);
@@ -1888,39 +1879,16 @@ Our Company: ${brand.companyName || "Not specified"}`;
             <>
               <SectionLabel>POUR SPECIFICATIONS</SectionLabel>
 
-              {/* Job site address with autocomplete */}
-              <div style={{ marginBottom: "14px", position: "relative" }}>
+              {/* Job site address — plain input */}
+              <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>JOB SITE ADDRESS</label>
                 <input
                   style={inputStyle}
                   placeholder="123 Main St, City, State..."
                   value={address}
                   autoComplete="off"
-                  onChange={e => {
-                    const val = e.target.value;
-                    setAddress(val);
-                    clearTimeout(addressDebounce.current);
-                    addressDebounce.current = setTimeout(() => fetchSuggestions(val), 350);
-                  }}
-                  onKeyDown={e => { if (e.key === "Escape") setShowSuggestions(false); }}
-                  onFocus={() => suggestions.length && setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  onChange={e => setAddress(e.target.value)}
                 />
-                {showSuggestions && suggestions.length > 0 && (
-                  <div style={{
-                    position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
-                    background: "#1a1a1a", border: "1px solid #f5a623", borderTop: "none", maxHeight: "200px", overflowY: "auto",
-                  }}>
-                    {suggestions.map((s, i) => (
-                      <div key={i}
-                        onMouseDown={() => { setAddress(s); setSuggestions([]); setShowSuggestions(false); }}
-                        style={{ padding: "9px 12px", fontSize: "11px", color: "#c8bfa8", cursor: "pointer", borderBottom: "1px solid #2a2a2a" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
-                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                      >📍 {s}</div>
-                    ))}
-                  </div>
-                )}
               </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>POUR TYPE</label>
@@ -2097,7 +2065,7 @@ Our Company: ${brand.companyName || "Not specified"}`;
             <>
               <SectionLabel>CHANGE ORDER DETAILS</SectionLabel>
 
-              {/* Job number selector */}
+              {/* Job number selector — dropdown + manual entry */}
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>REFERENCE JOB NUMBER *</label>
                 {(() => {
@@ -2110,28 +2078,37 @@ Our Company: ${brand.companyName || "Not specified"}`;
                       uniqueJobs.push(j);
                     }
                   });
-                  return uniqueJobs.length > 0 ? (
-                    <select style={inputStyle} value={coForm.linkedJobNumber} onChange={e => {
-                      const selected = uniqueJobs.find(j => j.jobInfo.jobNumber === e.target.value);
-                      if (selected) {
-                        loadJob(selected);
-                        setCoForm(prev => ({ ...prev, linkedJobNumber: e.target.value }));
-                        setPhase(2);
-                      } else {
-                        setCoForm(prev => ({ ...prev, linkedJobNumber: e.target.value }));
-                      }
-                    }}>
-                      <option value="">— Select Job —</option>
-                      {uniqueJobs.map(j => (
-                        <option key={j.id} value={j.jobInfo.jobNumber}>
-                          {j.jobInfo.jobNumber} — {j.jobInfo.projectName || j.address || "No name"}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input style={inputStyle} placeholder="JOB-2025-001"
-                      value={coForm.linkedJobNumber}
-                      onChange={e => setCoForm({ ...coForm, linkedJobNumber: e.target.value })} />
+                  return (
+                    <div>
+                      {uniqueJobs.length > 0 && (
+                        <select style={{ ...inputStyle, marginBottom: "8px" }}
+                          value={coForm.linkedJobNumber}
+                          onChange={e => {
+                            const val = e.target.value;
+                            const selected = uniqueJobs.find(j => j.jobInfo.jobNumber === val);
+                            if (selected) {
+                              loadJob(selected);
+                              setCoForm(prev => ({ ...prev, linkedJobNumber: val }));
+                              setPhase(2);
+                            } else {
+                              setCoForm(prev => ({ ...prev, linkedJobNumber: val }));
+                            }
+                          }}>
+                          <option value="">— Select saved job —</option>
+                          {uniqueJobs.map(j => (
+                            <option key={j.id} value={j.jobInfo.jobNumber}>
+                              {j.jobInfo.jobNumber} — {j.jobInfo.projectName || j.address || "No name"} · ${getJobBidTotal(j).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <div style={{ fontSize: "9px", color: "#555", marginBottom: "4px", letterSpacing: "1px" }}>
+                        {uniqueJobs.length > 0 ? "OR ENTER MANUALLY:" : "ENTER JOB NUMBER:"}
+                      </div>
+                      <input style={inputStyle} placeholder="JOB-2025-001"
+                        value={coForm.linkedJobNumber}
+                        onChange={e => setCoForm({ ...coForm, linkedJobNumber: e.target.value })} />
+                    </div>
                   );
                 })()}
               </div>
@@ -2205,15 +2182,11 @@ Our Company: ${brand.companyName || "Not specified"}`;
                   const rebarCost = coForm.rebarType === "none" || !rebarItem2 ? 0
                     : rebarItem2.unit === "SF" ? sfVal * rebarItem2.price
                     : sfVal * rebarLbPerSF * rebarItem2.price;
-                  const laborHrs = parseFloat(coForm.addedLaborHours || 0);
-                  const equipDays = parseFloat(coForm.equipmentDays || 0);
                   const concreteRate = P[`concrete_${bidForm.psi}`]?.price || P.concrete_3000?.price || 155;
-                  const laborRate = P[coForm.addedLaborRole]?.price || P.laborer?.price || 42;
-                  const equipRate = P[coForm.equipmentType]?.price || 0;
+                  const laborCost = (coForm.laborItems || []).reduce((sum, item) => sum + parseFloat(item.hours || 0) * (P[item.role]?.price || P.laborer?.price || 42), 0);
+                  const equipCost = (coForm.equipmentItems || []).reduce((sum, item) => sum + parseFloat(item.days || 0) * (P[item.type]?.price || 0), 0);
                   const concreteCost = cyVal * concreteRate;
                   const sfCost = sfVal * ((P.placement_labor?.price || 1.20) + (P.finishing_labor?.price || 2.85));
-                  const laborCost = laborHrs * laborRate;
-                  const equipCost = equipDays * equipRate;
                   const subtotal = concreteCost + rebarCost + sfCost + laborCost + equipCost;
                   const overhead = subtotal * 0.12;
                   const profit = (subtotal + overhead) * 0.10;
@@ -2246,21 +2219,67 @@ Our Company: ${brand.companyName || "Not specified"}`;
                           }
                         </select>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "8px" }}>
-                        <div><label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>LABOR HRS</label><input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="0" value={coForm.addedLaborHours} onChange={e => setCoForm({ ...coForm, addedLaborHours: e.target.value })} /></div>
-                        <div><label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>EQUIP DAYS</label><input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="0" value={coForm.equipmentDays} onChange={e => setCoForm({ ...coForm, equipmentDays: e.target.value })} /></div>
-                      </div>
-                      <div style={{ marginBottom: "6px" }}>
-                        <label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>LABOR ROLE</label>
-                        <select style={{ ...inputStyle, fontSize: "12px" }} value={coForm.addedLaborRole} onChange={e => setCoForm({ ...coForm, addedLaborRole: e.target.value })}>
-                          {[["foreman","Foreman"],["journeyman","Journeyman"],["laborer","Laborer"],["rebar_crew","Rebar Crew"]].map(([v,l]) => <option key={v} value={v}>{l} — ${P[v]?.price || "?"}/HR</option>)}
-                        </select>
-                      </div>
+
+                      {/* LABOR — multiple rows */}
                       <div style={{ marginBottom: "10px" }}>
-                        <label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>EQUIPMENT TYPE</label>
-                        <select style={{ ...inputStyle, fontSize: "11px" }} value={coForm.equipmentType} onChange={e => setCoForm({ ...coForm, equipmentType: e.target.value })}>
-                          {[["pump_truck","Pump Truck"],["bull_float","Bull Float"],["power_trowel","Power Trowel"],["plate_compactor","Compactor"],["concrete_saw","Concrete Saw"]].map(([v,l]) => <option key={v} value={v}>{l} — ${P[v]?.price || "?"}/DAY</option>)}
-                        </select>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>LABOR</label>
+                          <button onClick={() => setCoForm(prev => ({ ...prev, laborItems: [...(prev.laborItems || []), { role: "laborer", hours: "" }] }))} style={{ background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "2px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>+ ADD</button>
+                        </div>
+                        {(coForm.laborItems || [{ role: "laborer", hours: "" }]).map((item, idx) => (
+                          <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 80px 28px", gap: "4px", marginBottom: "4px", alignItems: "center" }}>
+                            <select style={{ ...inputStyle, fontSize: "11px" }} value={item.role}
+                              onChange={e => {
+                                const updated = [...(coForm.laborItems || [])];
+                                updated[idx] = { ...updated[idx], role: e.target.value };
+                                setCoForm(prev => ({ ...prev, laborItems: updated }));
+                              }}>
+                              {[["foreman","Foreman"],["journeyman","Journeyman"],["laborer","Laborer"],["rebar_crew","Rebar Crew"]].map(([v,l]) => <option key={v} value={v}>{l} — ${P[v]?.price || "?"}/HR</option>)}
+                            </select>
+                            <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="hrs"
+                              value={item.hours}
+                              onChange={e => {
+                                const updated = [...(coForm.laborItems || [])];
+                                updated[idx] = { ...updated[idx], hours: e.target.value };
+                                setCoForm(prev => ({ ...prev, laborItems: updated }));
+                              }} />
+                            <button onClick={() => {
+                              const updated = (coForm.laborItems || []).filter((_, i) => i !== idx);
+                              setCoForm(prev => ({ ...prev, laborItems: updated.length ? updated : [{ role: "laborer", hours: "" }] }));
+                            }} style={{ background: "transparent", color: "#e53935", border: "none", fontSize: "14px", cursor: "pointer", padding: "0" }}>×</button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* EQUIPMENT — multiple rows */}
+                      <div style={{ marginBottom: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <label style={{ ...labelStyle, fontSize: "9px", color: "#888" }}>EQUIPMENT</label>
+                          <button onClick={() => setCoForm(prev => ({ ...prev, equipmentItems: [...(prev.equipmentItems || []), { type: "pump_truck", days: "" }] }))} style={{ background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "2px 8px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>+ ADD</button>
+                        </div>
+                        {(coForm.equipmentItems || [{ type: "pump_truck", days: "" }]).map((item, idx) => (
+                          <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 80px 28px", gap: "4px", marginBottom: "4px", alignItems: "center" }}>
+                            <select style={{ ...inputStyle, fontSize: "11px" }} value={item.type}
+                              onChange={e => {
+                                const updated = [...(coForm.equipmentItems || [])];
+                                updated[idx] = { ...updated[idx], type: e.target.value };
+                                setCoForm(prev => ({ ...prev, equipmentItems: updated }));
+                              }}>
+                              {[["pump_truck","Pump Truck"],["bull_float","Bull Float"],["power_trowel","Power Trowel"],["plate_compactor","Compactor"],["concrete_saw","Concrete Saw"]].map(([v,l]) => <option key={v} value={v}>{l} — ${P[v]?.price || "?"}/DAY</option>)}
+                            </select>
+                            <input style={{ ...inputStyle, fontSize: "12px" }} type="number" placeholder="days"
+                              value={item.days}
+                              onChange={e => {
+                                const updated = [...(coForm.equipmentItems || [])];
+                                updated[idx] = { ...updated[idx], days: e.target.value };
+                                setCoForm(prev => ({ ...prev, equipmentItems: updated }));
+                              }} />
+                            <button onClick={() => {
+                              const updated = (coForm.equipmentItems || []).filter((_, i) => i !== idx);
+                              setCoForm(prev => ({ ...prev, equipmentItems: updated.length ? updated : [{ type: "pump_truck", days: "" }] }));
+                            }} style={{ background: "transparent", color: "#e53935", border: "none", fontSize: "14px", cursor: "pointer", padding: "0" }}>×</button>
+                          </div>
+                        ))}
                       </div>
                       {/* Live cost summary */}
                       <div style={{ background: "#111", border: "1px solid #e5393533", padding: "10px 12px", fontFamily: "'Courier New', monospace", fontSize: "11px" }}>
@@ -2268,8 +2287,8 @@ Our Company: ${brand.companyName || "Not specified"}`;
                           concreteCost > 0 && [`Concrete (${cyVal.toFixed(1)} CY @ $${concreteRate})`, concreteCost],
                           sfCost > 0 && [`Placement + Finish (${sfVal} SF)`, sfCost],
                           rebarCost > 0 && [`Reinforcement (${P[coForm.rebarType]?.label || coForm.rebarType})`, rebarCost],
-                          laborCost > 0 && [`${P[coForm.addedLaborRole]?.label || "Labor"} (${laborHrs} hrs)`, laborCost],
-                          equipCost > 0 && [`${P[coForm.equipmentType]?.label || "Equipment"} (${equipDays} day${equipDays !== 1 ? "s" : ""})`, equipCost],
+                          laborCost > 0 && [`Labor (${(coForm.laborItems || []).length} role${(coForm.laborItems || []).length !== 1 ? "s" : ""})`, laborCost],
+                          equipCost > 0 && [`Equipment (${(coForm.equipmentItems || []).length} item${(coForm.equipmentItems || []).length !== 1 ? "s" : ""})`, equipCost],
                           subtotal > 0 && ["Overhead (12%)", overhead],
                           subtotal > 0 && ["Profit (10%)", profit],
                         ].filter(Boolean).map(([l, v]) => (
