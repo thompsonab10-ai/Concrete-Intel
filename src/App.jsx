@@ -1794,83 +1794,63 @@ Our Company: ${brand.companyName || "Not specified"}`;
           {/* PHASE 0: Site Intel */}
           {phase === 0 && (
             <>
-              <SectionLabel>QUICK STATS</SectionLabel>
+              <SectionLabel>MONDAY MORNING NUMBERS</SectionLabel>
               {(() => {
-                const totalJobs = jobs.length;
-                const uniqueProjects = new Set(jobs.map(j => j.projectKey || j.id)).size;
-                const totalBidValue = jobs.reduce((sum, j) => sum + getJobBidTotal(j), 0);
-                const avgBid = uniqueProjects > 0 ? totalBidValue / uniqueProjects : 0;
-                // Get latest revision per project for status
                 const latestByProject = {};
                 jobs.forEach(j => {
                   const key = j.projectKey || j.id;
                   if (!latestByProject[key] || (j.version || 1) > (latestByProject[key].version || 1)) latestByProject[key] = j;
                 });
-                const latestJobs = Object.values(latestByProject);
-                const wonCount = latestJobs.filter(j => j.status === "won").length;
-                const lostCount = latestJobs.filter(j => j.status === "lost").length;
-                const submittedCount = latestJobs.filter(j => j.status === "submitted").length;
-                const wonValue = jobs.filter(j => j.status === "won").reduce((sum, j) => sum + getJobBidTotal(j), 0);
+                const latest = Object.values(latestByProject);
+                const won = latest.filter(j => j.status === "won");
+                const lost = latest.filter(j => j.status === "lost");
+                const submitted = latest.filter(j => j.status === "submitted");
+                const decided = won.length + lost.length;
+                const closeRate = decided > 0 ? Math.round((won.length / decided) * 100) : null;
+                const pipelineValue = submitted.reduce((s, j) => s + getJobBidTotal(j), 0);
+                const closedJobs = latest.filter(j => j.status === "won" && j.closeout?.actualCost);
+                const totalRevenue = closedJobs.reduce((s, j) => s + parseFloat(j.closeout.actualRevenue || 0), 0);
+                const totalCost = closedJobs.reduce((s, j) => s + parseFloat(j.closeout.actualCost || 0), 0);
+                const avgMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100).toFixed(1) : null;
+
                 return (
                   <div style={{ marginBottom: "16px" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
-                      {[
-                        { label: "TOTAL BIDS", value: totalJobs, color: "#f5a623" },
-                        { label: "SUBMITTED", value: submittedCount, color: "#2196f3" },
-                        { label: "WON", value: wonCount, color: "#4caf50" },
-                        { label: "LOST", value: lostCount, color: "#e53935" },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{ background: "#111", border: `1px solid ${color}22`, padding: "10px 12px" }}>
-                          <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>{label}</div>
-                          <div style={{ fontSize: "18px", fontWeight: "bold", color }}>{value}</div>
+                      <div style={{ background: "#111", borderLeft: "3px solid #2196f3", padding: "12px 14px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>PIPELINE VALUE</div>
+                        <div style={{ fontSize: "20px", fontWeight: "bold", color: "#2196f3" }}>
+                          {pipelineValue > 0 ? `$${pipelineValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
                         </div>
-                      ))}
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{submitted.length} bid{submitted.length !== 1 ? "s" : ""} outstanding</div>
+                      </div>
+                      <div style={{ background: "#111", borderLeft: "3px solid #4caf50", padding: "12px 14px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>CLOSE RATE</div>
+                        <div style={{ fontSize: "20px", fontWeight: "bold", color: closeRate !== null ? (closeRate >= 50 ? "#4caf50" : "#f5a623") : "#333" }}>
+                          {closeRate !== null ? `${closeRate}%` : "—"}
+                        </div>
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{won.length}W · {lost.length}L of {decided} decided</div>
+                      </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                      {[
-                        { label: "TOTAL BID VALUE", value: `$${totalBidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#f5a623" },
-                        { label: "WON VALUE", value: wonValue > 0 ? `$${wonValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", color: "#4caf50" },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{ background: "#111", border: `1px solid ${color}22`, padding: "10px 12px" }}>
-                          <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>{label}</div>
-                          <div style={{ fontSize: "14px", fontWeight: "bold", color }}>{value}</div>
+                      <div style={{ background: "#111", borderLeft: "3px solid #f5a623", padding: "12px 14px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>JOBS TRACKED</div>
+                        <div style={{ fontSize: "20px", fontWeight: "bold", color: "#f5a623" }}>{latest.length}</div>
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>across all statuses</div>
+                      </div>
+                      <div style={{ background: "#111", borderLeft: "3px solid #9c27b0", padding: "12px 14px" }}>
+                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>AVG MARGIN</div>
+                        <div style={{ fontSize: "20px", fontWeight: "bold", color: avgMargin !== null ? (parseFloat(avgMargin) >= 20 ? "#4caf50" : parseFloat(avgMargin) >= 10 ? "#f5a623" : "#e53935") : "#333" }}>
+                          {avgMargin !== null ? `${avgMargin}%` : "—"}
                         </div>
-                      ))}
+                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{closedJobs.length} closed job{closedJobs.length !== 1 ? "s" : ""} with actuals</div>
+                      </div>
                     </div>
                   </div>
                 );
               })()}
-
-              {/* Profit summary — only shows when closed jobs have actuals */}
-              {(() => {
-                const closedJobs = jobs.filter(j => j.status === "won" && j.closeout?.actualCost);
-                if (closedJobs.length === 0) return null;
-
-                const totalRevenue = closedJobs.reduce((s, j) => s + parseFloat(j.closeout.actualRevenue || 0), 0);
-                const totalCost = closedJobs.reduce((s, j) => s + parseFloat(j.closeout.actualCost || 0), 0);
-                const totalProfit = totalRevenue - totalCost;
-                const avgMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0;
-
-                return (
-                  <div style={{ marginTop: "12px" }}>
-                    <SectionLabel>PROFIT SUMMARY</SectionLabel>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                      {[
-                        { label: "TOTAL PROFIT", value: `$${totalProfit.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: totalProfit >= 0 ? "#4caf50" : "#e53935" },
-                        { label: "AVG MARGIN", value: `${avgMargin}%`, color: parseFloat(avgMargin) >= 20 ? "#4caf50" : parseFloat(avgMargin) >= 10 ? "#f5a623" : "#e53935" },
-                        { label: "TOTAL REVENUE", value: `$${totalRevenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#f0ece0" },
-                        { label: "TOTAL COST", value: `$${totalCost.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, color: "#888" },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", padding: "8px 10px" }}>
-                          <div style={{ fontSize: "7px", letterSpacing: "1px", color: "#444", marginBottom: "3px" }}>{label}</div>
-                          <div style={{ fontSize: "13px", fontWeight: "bold", color }}>{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: "9px", color: "#444", marginTop: "6px", letterSpacing: "0.5px" }}>Based on {closedJobs.length} closed job{closedJobs.length !== 1 ? "s" : ""}</div>
-                  </div>
-                );
-              })()}
+              <button onClick={() => setPhase(1)} style={{ width: "100%", background: "#f5a623", color: "#000", border: "none", padding: "10px", fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "2px", cursor: "pointer", fontWeight: "bold", marginTop: "4px" }}>
+                + NEW BID
+              </button>
             </>
           )}
 
@@ -2546,84 +2526,76 @@ Our Company: ${brand.companyName || "Not specified"}`;
 
           {phase === 0 && (
             <>
-              {/* WIN RATE ANALYTICS */}
-              {jobs.length > 0 && (() => {
+              {jobs.length === 0 ? (
+                <div style={{ color: "#444", fontSize: "12px", letterSpacing: "1px", marginTop: "40px", textAlign: "center" }}>
+                  <div style={{ fontSize: "32px", marginBottom: "16px" }}>📋</div>
+                  <div>NO JOBS SAVED YET</div>
+                  <div style={{ fontSize: "10px", color: "#333", marginTop: "8px" }}>Generate a bid and hit SAVE JOB to get started.</div>
+                </div>
+              ) : (() => {
                 const latestByProject = {};
                 jobs.forEach(j => {
                   const key = j.projectKey || j.id;
                   if (!latestByProject[key] || (j.version || 1) > (latestByProject[key].version || 1)) latestByProject[key] = j;
                 });
-                const latest = Object.values(latestByProject);
-                const won = latest.filter(j => j.status === "won");
-                const lost = latest.filter(j => j.status === "lost");
-                const submitted = latest.filter(j => j.status === "submitted");
-                const decided = won.length + lost.length;
-                const closeRate = decided > 0 ? Math.round((won.length / decided) * 100) : null;
+                const latest = Object.values(latestByProject).sort((a, b) => b.id - a.id);
+                const now = Date.now();
 
-                // Bid value by pour type
-                const byPourType = {};
-                latest.forEach(j => {
-                  const pt = j.bidForm?.pourType || "other";
-                  const val = getJobBidTotal(j);
-                  if (!byPourType[pt]) byPourType[pt] = { count: 0, total: 0, won: 0 };
-                  byPourType[pt].count++;
-                  byPourType[pt].total += val;
-                  if (j.status === "won") byPourType[pt].won++;
+                // Expiring soon (submitted bids within 7 days)
+                const expiringSoon = latest.filter(j => {
+                  if ((j.status || "draft") !== "submitted") return false;
+                  const expiryDate = j.jobInfo?.bidExpiry
+                    ? new Date(j.jobInfo.bidExpiry).getTime()
+                    : j.id + (30 * 24 * 60 * 60 * 1000);
+                  const daysLeft = Math.ceil((expiryDate - now) / (24 * 60 * 60 * 1000));
+                  return daysLeft <= 7;
                 });
 
-                const maxBidValue = Math.max(...Object.values(byPourType).map(v => v.total / v.count || 0), 1);
+                // Open closeouts — won but no actual cost
+                const openCloseouts = latest.filter(j => j.status === "won" && !j.closeout?.actualCost);
+
+                // Active submitted bids
+                const submitted = latest.filter(j => j.status === "submitted");
+
+                // Best pour type by margin
+                const closedWithActuals = latest.filter(j => j.status === "won" && j.closeout?.actualCost);
+                const byPourType = {};
+                closedWithActuals.forEach(j => {
+                  const pt = j.bidForm?.pourType || "other";
+                  const rev = parseFloat(j.closeout.actualRevenue || 0);
+                  const cost = parseFloat(j.closeout.actualCost || 0);
+                  if (!byPourType[pt]) byPourType[pt] = { revenue: 0, cost: 0, count: 0 };
+                  byPourType[pt].revenue += rev;
+                  byPourType[pt].cost += cost;
+                  byPourType[pt].count++;
+                });
+                const bestPourType = Object.entries(byPourType)
+                  .map(([pt, d]) => ({ pt, margin: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue * 100) : 0, count: d.count }))
+                  .sort((a, b) => b.margin - a.margin)[0];
 
                 return (
-                  <div style={{ marginBottom: "24px" }}>
-                    <SectionLabel>WIN RATE ANALYTICS</SectionLabel>
-
-                    {/* Close rate + pipeline */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-                      <div style={{ background: "#0d0d0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "12px" }}>
-                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>CLOSE RATE</div>
-                        <div style={{ fontSize: "24px", fontWeight: "bold", color: closeRate !== null ? (closeRate >= 50 ? "#4caf50" : "#e53935") : "#333" }}>
-                          {closeRate !== null ? `${closeRate}%` : "—"}
-                        </div>
-                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{won.length}W / {lost.length}L</div>
-                      </div>
-                      <div style={{ background: "#0d0d0d", border: "1px solid #2196f333", borderLeft: "3px solid #2196f3", padding: "12px" }}>
-                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>IN PIPELINE</div>
-                        <div style={{ fontSize: "24px", fontWeight: "bold", color: "#2196f3" }}>{submitted.length}</div>
-                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>submitted bids</div>
-                      </div>
-                      <div style={{ background: "#0d0d0d", border: "1px solid #f5a62333", borderLeft: "3px solid #f5a623", padding: "12px" }}>
-                        <div style={{ fontSize: "8px", letterSpacing: "2px", color: "#555", marginBottom: "4px" }}>AVG BID SIZE</div>
-                        <div style={{ fontSize: "18px", fontWeight: "bold", color: "#f5a623" }}>
-                          {(() => {
-                            const vals = latest.map(j => getJobBidTotal(j)).filter(v => v > 0);
-                            const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-                            return avg > 0 ? `$${avg.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—";
-                          })()}
-                        </div>
-                        <div style={{ fontSize: "9px", color: "#555", marginTop: "2px" }}>{latest.length} projects</div>
-                      </div>
-                    </div>
-
-                    {/* Avg bid by pour type bar chart */}
-                    {Object.keys(byPourType).length > 0 && (
-                      <div style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "14px", marginBottom: "0" }}>
-                        <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555", marginBottom: "12px" }}>AVG BID BY POUR TYPE</div>
-                        {Object.entries(byPourType).sort(([,a],[,b]) => (b.total/b.count) - (a.total/a.count)).map(([pt, data]) => {
-                          const avg = data.total / data.count;
-                          const pct = Math.round((avg / maxBidValue) * 100);
-                          const winRate = data.count > 0 ? Math.round((data.won / data.count) * 100) : 0;
+                  <div>
+                    {/* EXPIRING SOON */}
+                    {expiringSoon.length > 0 && (
+                      <div style={{ marginBottom: "24px" }}>
+                        <SectionLabel>⚠ EXPIRING THIS WEEK</SectionLabel>
+                        {expiringSoon.map(job => {
+                          const expiryDate = job.jobInfo?.bidExpiry
+                            ? new Date(job.jobInfo.bidExpiry).getTime()
+                            : job.id + (30 * 24 * 60 * 60 * 1000);
+                          const daysLeft = Math.ceil((expiryDate - now) / (24 * 60 * 60 * 1000));
+                          const bidValue = getJobBidTotal(job);
                           return (
-                            <div key={pt} style={{ marginBottom: "10px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                <span style={{ fontSize: "10px", color: "#c8bfa8" }}>{pt.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
-                                <div style={{ display: "flex", gap: "12px" }}>
-                                  <span style={{ fontSize: "10px", color: "#f5a623" }}>{avg > 0 ? `$${avg.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}</span>
-                                  <span style={{ fontSize: "10px", color: "#4caf50" }}>{winRate}% close</span>
-                                  <span style={{ fontSize: "10px", color: "#555" }}>{data.count} bids</span>
+                            <div key={job.id} style={{ background: "#0d0d0d", border: `1px solid ${daysLeft <= 3 ? "#e53935" : "#f5a623"}`, borderLeft: `3px solid ${daysLeft <= 3 ? "#e53935" : "#f5a623"}`, padding: "12px 14px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: "12px", color: "#f0ece0", fontWeight: "bold", marginBottom: "2px" }}>{job.jobInfo?.projectName || job.address || "Unnamed"}</div>
+                                <div style={{ fontSize: "10px", color: "#888" }}>{bidValue > 0 ? `$${bidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"} · {job.jobInfo?.clientName || job.jobInfo?.gcName || "No client"}</div>
+                                <div style={{ fontSize: "9px", color: daysLeft <= 3 ? "#e53935" : "#f5a623", marginTop: "4px", fontWeight: "bold" }}>
+                                  {daysLeft <= 0 ? "EXPIRED" : `EXPIRES IN ${daysLeft} DAY${daysLeft === 1 ? "" : "S"}`}
                                 </div>
                               </div>
-                              <div style={{ background: "#1a1a1a", height: "6px", borderRadius: "2px", overflow: "hidden" }}>
-                                <div style={{ background: "#f5a623", height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button onClick={() => { loadJob(job); setPhase(1); }} style={{ background: "#f5a623", color: "#000", border: "none", padding: "6px 12px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer", fontWeight: "bold" }}>REVISE</button>
                               </div>
                             </div>
                           );
@@ -2631,47 +2603,95 @@ Our Company: ${brand.companyName || "Not specified"}`;
                       </div>
                     )}
 
-                    {/* Profit analytics — only if closeout data exists */}
-                    {(() => {
-                      const closedJobs = latest.filter(j => j.status === "won" && j.closeout?.actualCost);
-                      if (closedJobs.length === 0) return null;
+                    {/* OPEN CLOSEOUTS */}
+                    {openCloseouts.length > 0 && (
+                      <div style={{ marginBottom: "24px" }}>
+                        <SectionLabel>ACTION NEEDED — CLOSE OUT WON JOBS</SectionLabel>
+                        {openCloseouts.map(job => {
+                          const bidValue = getJobBidTotal(job);
+                          return (
+                            <div key={job.id} style={{ background: "#0d0d0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "12px 14px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: "12px", color: "#f0ece0", fontWeight: "bold", marginBottom: "2px" }}>{job.jobInfo?.projectName || job.address || "Unnamed"}</div>
+                                <div style={{ fontSize: "10px", color: "#888" }}>{bidValue > 0 ? `$${bidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"} · Enter actuals to track margin</div>
+                              </div>
+                              <button onClick={() => { loadJob(job); setPhase(0); }} style={{ background: "transparent", color: "#4caf50", border: "1px solid #4caf5044", padding: "6px 12px", fontFamily: "'Courier New', monospace", fontSize: "9px", cursor: "pointer" }}>CLOSE OUT</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                      // Profit by pour type
-                      const profitByType = {};
-                      closedJobs.forEach(j => {
-                        const pt = j.bidForm?.pourType || "other";
-                        const revenue = parseFloat(j.closeout.actualRevenue || 0);
-                        const cost = parseFloat(j.closeout.actualCost || 0);
-                        const profit = revenue - cost;
-                        if (!profitByType[pt]) profitByType[pt] = { profit: 0, revenue: 0, count: 0 };
-                        profitByType[pt].profit += profit;
-                        profitByType[pt].revenue += revenue;
-                        profitByType[pt].count++;
-                      });
+                    {/* BEST POUR TYPE */}
+                    {bestPourType && (
+                      <div style={{ marginBottom: "24px" }}>
+                        <SectionLabel>BEST MARGIN WORK</SectionLabel>
+                        <div style={{ background: "#0d0d0d", border: "1px solid #9c27b033", borderLeft: "3px solid #9c27b0", padding: "14px" }}>
+                          <div style={{ fontSize: "16px", fontWeight: "bold", color: "#9c27b0", marginBottom: "4px" }}>
+                            {bestPourType.pt.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#4caf50", marginBottom: "2px" }}>{bestPourType.margin.toFixed(1)}% avg margin</div>
+                          <div style={{ fontSize: "10px", color: "#555" }}>Based on {bestPourType.count} closed job{bestPourType.count !== 1 ? "s" : ""} with actual costs entered</div>
+                        </div>
+                      </div>
+                    )}
 
-                      const maxProfit = Math.max(...Object.values(profitByType).map(v => v.profit), 1);
-                      const sortedTypes = Object.entries(profitByType).sort(([,a],[,b]) => b.profit - a.profit);
-
-                      return (
-                        <div style={{ background: "#0d0d0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "14px", marginTop: "12px" }}>
-                          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50", marginBottom: "12px" }}>PROFIT BY POUR TYPE ({closedJobs.length} CLOSED JOBS)</div>
-                          {sortedTypes.map(([pt, data]) => {
-                            const margin = data.revenue > 0 ? ((data.profit / data.revenue) * 100).toFixed(1) : 0;
-                            const pct = Math.max(0, Math.round((data.profit / maxProfit) * 100));
-                            return (
-                              <div key={pt} style={{ marginBottom: "12px" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                  <span style={{ fontSize: "10px", color: "#c8bfa8" }}>{pt.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
-                                  <div style={{ display: "flex", gap: "12px" }}>
-                                    <span style={{ fontSize: "10px", color: data.profit >= 0 ? "#4caf50" : "#e53935", fontWeight: "bold" }}>
-                                      ${data.profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                                    </span>
-                                    <span style={{ fontSize: "10px", color: parseFloat(margin) >= 20 ? "#4caf50" : "#f5a623" }}>{margin}% margin</span>
-                                    <span style={{ fontSize: "10px", color: "#555" }}>{data.count} job{data.count !== 1 ? "s" : ""}</span>
-                                  </div>
+                    {/* SUBMITTED PIPELINE */}
+                    {submitted.length > 0 && (
+                      <div style={{ marginBottom: "24px" }}>
+                        <SectionLabel>SUBMITTED — AWAITING DECISION</SectionLabel>
+                        {submitted.map(job => {
+                          const bidValue = getJobBidTotal(job);
+                          const expiryDate = job.jobInfo?.bidExpiry
+                            ? new Date(job.jobInfo.bidExpiry).getTime()
+                            : job.id + (30 * 24 * 60 * 60 * 1000);
+                          const daysLeft = Math.ceil((expiryDate - now) / (24 * 60 * 60 * 1000));
+                          return (
+                            <div key={job.id} style={{ background: "#0d0d0d", border: "1px solid #2196f333", borderLeft: "3px solid #2196f3", padding: "12px 14px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <div style={{ fontSize: "12px", color: "#f0ece0", fontWeight: "bold", marginBottom: "2px" }}>{job.jobInfo?.projectName || job.address || "Unnamed"}</div>
+                                <div style={{ fontSize: "10px", color: "#888" }}>
+                                  {bidValue > 0 ? `$${bidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
+                                  {job.jobInfo?.clientName ? ` · ${job.jobInfo.clientName}` : ""}
+                                  {job.bidForm?.pourType ? ` · ${job.bidForm.pourType.replace(/-/g, " ")}` : ""}
                                 </div>
-                                <div style={{ background: "#1a1a1a", height: "6px", borderRadius: "2px", overflow: "hidden" }}>
-                                  <div style={{ background: data.profit >= 0 ? "#4caf50" : "#e53935", height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                                <div style={{ fontSize: "9px", color: daysLeft <= 7 ? "#f5a623" : "#555", marginTop: "4px" }}>
+                                  {daysLeft > 0 ? `${daysLeft} days until expiry` : "Expired"}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button onClick={() => updateJobStatus(job.id, "won")} style={{ background: "#4caf5022", color: "#4caf50", border: "1px solid #4caf5044", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>WON</button>
+                                <button onClick={() => updateJobStatus(job.id, "lost")} style={{ background: "#e5393522", color: "#e53935", border: "1px solid #e5393544", padding: "5px 10px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>LOST</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* ACTIVE JOBS WITH CLOSEOUT */}
+                    {(() => {
+                      const wonWithCloseout = latest.filter(j => j.status === "won" && j.closeout?.actualCost);
+                      if (wonWithCloseout.length === 0) return null;
+                      return (
+                        <div style={{ marginBottom: "24px" }}>
+                          <SectionLabel>CLOSED JOBS — PROFIT SUMMARY</SectionLabel>
+                          {wonWithCloseout.map(job => {
+                            const rev = parseFloat(job.closeout.actualRevenue || 0);
+                            const cost = parseFloat(job.closeout.actualCost || 0);
+                            const profit = rev - cost;
+                            const margin = rev > 0 ? ((profit / rev) * 100).toFixed(1) : 0;
+                            return (
+                              <div key={job.id} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "10px 14px", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div>
+                                  <div style={{ fontSize: "11px", color: "#f0ece0", fontWeight: "bold", marginBottom: "2px" }}>{job.jobInfo?.projectName || job.address || "Unnamed"}</div>
+                                  <div style={{ fontSize: "10px", color: "#888" }}>{job.bidForm?.pourType?.replace(/-/g, " ") || "—"}</div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontSize: "13px", fontWeight: "bold", color: profit >= 0 ? "#4caf50" : "#e53935" }}>
+                                    {profit >= 0 ? "+" : ""}${profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                                  </div>
+                                  <div style={{ fontSize: "9px", color: parseFloat(margin) >= 20 ? "#4caf50" : parseFloat(margin) >= 10 ? "#f5a623" : "#e53935" }}>{margin}% margin</div>
                                 </div>
                               </div>
                             );
@@ -2682,137 +2702,8 @@ Our Company: ${brand.companyName || "Not specified"}`;
                   </div>
                 );
               })()}
-
-              <SectionLabel>ACTIVE JOBS</SectionLabel>
-              {jobs.length === 0 ? (
-                <div style={{ height: "300px", background: "#0d0d0d", border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#333" }}>
-                  <div style={{ fontSize: "36px", marginBottom: "12px" }}>🏗</div>
-                  <div style={{ fontSize: "11px", letterSpacing: "2px", marginBottom: "8px" }}>NO JOBS YET</div>
-                  <button onClick={() => setPhase(1)} style={{ background: "#f5a623", color: "#000", border: "none", padding: "10px 20px", fontFamily: "'Courier New', monospace", fontSize: "10px", letterSpacing: "2px", cursor: "pointer", marginTop: "12px" }}>
-                    ▶ CREATE FIRST BID
-                  </button>
-                </div>
-              ) : (() => {
-                // Group by project key, show latest revision per project
-                const grouped = {};
-                jobs.forEach(job => {
-                  const key = job.projectKey || `legacy_${job.id}`;
-                  if (!grouped[key] || (job.version || 1) > (grouped[key].version || 1)) {
-                    grouped[key] = job;
-                  }
-                });
-                const projectList = Object.values(grouped).sort((a, b) => b.id - a.id);
-                const allRevisions = jobs;
-                const now = Date.now();
-
-                return (
-                  <div>
-                    {projectList.map(job => {
-                      const bidValue = getJobBidTotal(job) || null;
-                      const revCount = allRevisions.filter(j => (j.projectKey || `legacy_${j.id}`) === (job.projectKey || `legacy_${job.id}`)).length;
-
-                      // Expiry calculation — 30 days from save date, only for submitted bids
-                      const expiryAlert = (() => {
-                        if ((job.status || "draft") !== "submitted") return null;
-                        const expiryDate = job.jobInfo?.bidExpiry
-                          ? new Date(job.jobInfo.bidExpiry).getTime()
-                          : job.id + (30 * 24 * 60 * 60 * 1000);
-                        const daysLeft = Math.ceil((expiryDate - now) / (24 * 60 * 60 * 1000));
-                        if (daysLeft <= 7) return { days: daysLeft, urgent: daysLeft <= 3 };
-                        return null;
-                      })();
-
-                      return (
-                        <div key={job.id} style={{ background: "#0d0d0d", border: `1px solid ${expiryAlert?.urgent ? "#e53935" : expiryAlert ? "#f5a623" : "#2a2a2a"}`, marginBottom: "10px", padding: "14px" }}>
-
-                          {/* Expiry alert banner */}
-                          {expiryAlert && (
-                            <div style={{ background: expiryAlert.urgent ? "#1a0000" : "#1a1000", border: `1px solid ${expiryAlert.urgent ? "#e53935" : "#f5a623"}`, padding: "6px 10px", marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ fontSize: "10px", color: expiryAlert.urgent ? "#e53935" : "#f5a623", letterSpacing: "1px", fontWeight: "bold" }}>
-                                {expiryAlert.days <= 0 ? "⚠ BID EXPIRED — FOLLOW UP NOW" : `⚠ EXPIRES IN ${expiryAlert.days} DAY${expiryAlert.days === 1 ? "" : "S"}`}
-                              </span>
-                              <button onClick={() => { loadJob(job); setPhase(1); }} style={{ background: "transparent", color: expiryAlert.urgent ? "#e53935" : "#f5a623", border: `1px solid ${expiryAlert.urgent ? "#e53935" : "#f5a623"}44`, padding: "3px 8px", fontFamily: "'Courier New', monospace", fontSize: "8px", cursor: "pointer" }}>
-                                REVISE
-                              </button>
-                            </div>
-                          )}
-
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: "#f0ece0", fontSize: "14px", fontWeight: "bold", marginBottom: "2px" }}>
-                                {job.jobInfo?.projectName || job.address || "Unnamed Project"}
-                              </div>
-                              {job.jobInfo?.projectName && <div style={{ color: "#666", fontSize: "10px", marginBottom: "4px" }}>{job.address}</div>}
-                              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                                {job.jobInfo?.clientName && <span style={{ fontSize: "10px", color: "#888" }}>Client: {job.jobInfo.clientName}</span>}
-                                {job.jobInfo?.gcName && <span style={{ fontSize: "10px", color: "#888" }}>GC: {job.jobInfo.gcName}</span>}
-                              </div>
-                              {job.jobInfo?.notes && (
-                                <div style={{ marginTop: "6px", background: "#111", border: "1px solid #ff980033", borderLeft: "2px solid #ff9800", padding: "5px 8px", fontSize: "10px", color: "#c8bfa8", lineHeight: "1.5" }}>
-                                  📝 {job.jobInfo.notes}
-                                </div>
-                              )}
-                            </div>
-                            <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "10px" }}>
-                              <button onClick={() => { loadJob(job); }} style={{
-                                background: "#f5a623", color: "#000", border: "none", padding: "6px 14px",
-                                fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
-                              }}>LOAD</button>
-                              <button onClick={() => quickRebid(job)} style={{
-                                background: "transparent", color: "#f5a623", border: "1px solid #f5a62344", padding: "6px 10px",
-                                fontFamily: "'Courier New', monospace", fontSize: "9px", letterSpacing: "1px", cursor: "pointer",
-                              }}>REBID</button>
-                            </div>
-                          </div>
-
-                          {/* Status selector */}
-                          <div style={{ display: "flex", gap: "4px", marginBottom: "10px" }}>
-                            {[
-                              { value: "draft", label: "DRAFT", color: "#666" },
-                              { value: "submitted", label: "SUBMITTED", color: "#2196f3" },
-                              { value: "won", label: "WON", color: "#4caf50" },
-                              { value: "lost", label: "LOST", color: "#e53935" },
-                            ].map(({ value, label, color }) => {
-                              const isActive = (job.status || "draft") === value;
-                              return (
-                                <button key={value} onClick={() => updateJobStatus(job.id, value)} style={{
-                                  flex: 1, background: isActive ? `${color}22` : "transparent",
-                                  color: isActive ? color : "#333",
-                                  border: `1px solid ${isActive ? color : "#2a2a2a"}`,
-                                  padding: "5px 4px", fontFamily: "'Courier New', monospace",
-                                  fontSize: "8px", letterSpacing: "1px", cursor: "pointer",
-                                  fontWeight: isActive ? "bold" : "normal",
-                                }}>{label}</button>
-                              );
-                            })}
-                          </div>
-
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "6px" }}>
-                            {[
-                              { l: "TOTAL BID", v: bidValue ? `$${bidValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—", c: "#4caf50" },
-                              { l: "POUR TYPE", v: job.bidForm?.pourType || "—", c: "#888" },
-                              { l: "SQUARE FT", v: job.bidForm?.sqft ? `${job.bidForm.sqft} SF` : "—", c: "#888" },
-                              { l: "REVISIONS", v: `v${job.version || 1} (${revCount})`, c: revCount > 1 ? "#f5a623" : "#555" },
-                            ].map(({ l, v, c }) => (
-                              <div key={l} style={{ background: "#111", padding: "6px 8px" }}>
-                                <div style={{ fontSize: "7px", letterSpacing: "1px", color: "#444", marginBottom: "3px" }}>{l}</div>
-                                <div style={{ fontSize: "11px", color: c, fontWeight: l === "TOTAL BID" ? "bold" : "normal" }}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{ fontSize: "9px", color: "#444", marginTop: "8px", letterSpacing: "0.5px" }}>Last updated: {job.savedAt}</div>
-
-                          {/* Close-out panel — shows when WON */}
-                          {(job.status === "won") && <CloseoutPanel job={job} onSave={updateJobCloseout} labelStyle={labelStyle} inputStyle={inputStyle} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
             </>
           )}
-
           {phase === 1 && (
             <>
               <SectionLabel>BID ESTIMATE OUTPUT</SectionLabel>

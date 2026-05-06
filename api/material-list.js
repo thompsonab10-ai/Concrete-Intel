@@ -13,10 +13,10 @@ function rule() {
   return p([], { border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "F5A623", space: 1 } }, spacing: { before: 0, after: 120 } });
 }
 
-module.exports = async function handler(req) {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+module.exports = async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
 
-  const body = await req.json();
+  const body = req.body;
   const { address, bidForm, bidOutput, brand, jobInfo, prices, estimate } = body;
 
   const co = brand || {};
