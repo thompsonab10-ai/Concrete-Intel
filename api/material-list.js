@@ -186,12 +186,7 @@ module.exports = async function handler(req, res) {
 
   const buffer = await Packer.toBuffer(doc);
 
-  return new Response(buffer, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="MaterialList_${jobNum.replace(/[^a-z0-9]/gi, "_")}.docx"`,
-      "Access-Control-Allow-Origin": "*",
-    }
-  });
-}
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  res.setHeader("Content-Disposition", "attachment; filename=MaterialList.docx");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  return res.send(buffer);}
