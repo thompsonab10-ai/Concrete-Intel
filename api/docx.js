@@ -44,12 +44,13 @@ function infoTable(rows) {
   });
 }
 
-module.exports = async function handler(req) {
+module.exports = async function handler(req, res) {
+  if (req.method === "OPTIONS") { res.setHeader("Access-Control-Allow-Origin","*"); return res.status(204).end(); }
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return res.status(405).end();
   }
 
-  const body = await req.json();
+  const body = req.body;
   const { address, bidForm, bidOutput, brand, jobInfo, estimate } = body;
 
   const co = brand || {};
@@ -257,12 +258,7 @@ module.exports = async function handler(req) {
 
   const buffer = await Packer.toBuffer(doc);
 
-  return new Response(buffer, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="BidProposal_${jobNum.replace(/[^a-z0-9]/gi, "_")}.docx"`,
-      "Access-Control-Allow-Origin": "*",
-    }
-  });
-}
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  res.setHeader("Content-Disposition", `attachment; filename="BidProposal_${jobNum.replace(/[^a-z0-9]/gi, "_")}.docx"`);
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  return res.send(buffer);}
