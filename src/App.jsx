@@ -2494,26 +2494,33 @@ Our Company: ${brand.companyName || "Not specified"}`;
             <>
               <SectionLabel>HELP & GUIDE</SectionLabel>
               <div style={{ fontSize: "11px", color: "#666", lineHeight: "1.8", marginBottom: "16px" }}>
-                Concrete Field Ops is an AI-powered platform built for concrete subcontractors. It handles bidding, change orders, job tracking, and profit analysis — all in one place.
+                AI-powered field ops platform for concrete subcontractors. Bidding, change orders, job tracking, and profit analysis in one place.
               </div>
 
               {[
-                { label: "📊 Dashboard", desc: "Home base. Job status, win rate, profit analytics." },
-                { label: "🏗 Bid Engine", desc: "AI-generated estimates using your Price Book rates. Export proposals and material lists." },
-                { label: "📋 Change Order", desc: "Link COs to jobs by number. Auto-pulls original contract value." },
-                { label: "📂 Job History", desc: "Full job file per job number — bids, revisions, and COs in one view." },
-                { label: "💲 Price Book", desc: "Your actual rates. All calculations use these numbers." },
-                { label: "⚙ Settings", desc: "Company branding and client contact book." },
+                { label: "📊 Dashboard", desc: "Pipeline value, close rate, expiring bids, open closeouts, submitted bids with one-click WON/LOST, and closed job profit summary." },
+                { label: "🏗 Bid Engine", desc: "AI estimates using your Price Book rates. Auto job numbers. Export Bid Proposal (.docx), Material List (.docx), and Email Summary." },
+                { label: "📋 Change Order", desc: "Link to any saved job by number. Auto-pulls original contract value. Multi-labor and multi-equipment rows. Generates formal CO document." },
+                { label: "📂 Job History", desc: "All bids and COs grouped by job number. Full revision history (v1, v2...) with LOAD, REBID, and status controls." },
+                { label: "💲 Price Book", desc: "Your actual rates. All bid math, takeoffs, and CO calculations run from here. Full CRUD — add, edit, delete, reset." },
+                { label: "⚙ Settings", desc: "Company branding (appears on all exports) and Client Contact Book with quick-select in Bid Engine." },
               ].map(({ label, desc }) => (
                 <div key={label} style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", padding: "10px 12px", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "11px", color: "#f0ece0", marginBottom: "3px" }}>{label}</div>
-                  <div style={{ fontSize: "10px", color: "#666", lineHeight: "1.5" }}>{desc}</div>
+                  <div style={{ fontSize: "11px", color: "#f0ece0", marginBottom: "4px" }}>{label}</div>
+                  <div style={{ fontSize: "10px", color: "#666", lineHeight: "1.6" }}>{desc}</div>
                 </div>
               ))}
 
               <div style={{ background: "#0d1a0d", border: "1px solid #4caf5033", borderLeft: "3px solid #4caf50", padding: "12px", marginTop: "8px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#4caf50", marginBottom: "8px" }}>FIRST TIME SETUP</div>
-                {["1. Set your rates in Price Book", "2. Add branding in Settings", "3. Create your first bid in Bid Engine", "4. Save it — it appears in Dashboard and Job History"].map(s => (
+                {[
+                  "1. Price Book — enter your actual rates",
+                  "2. Settings — add company branding",
+                  "3. Bid Engine — generate your first estimate",
+                  "4. Save Job — it appears in Dashboard and Job History",
+                  "5. Mark SUBMITTED when sent, WON/LOST when decided",
+                  "6. Close out WON jobs with actual revenue and cost",
+                ].map(s => (
                   <div key={s} style={{ fontSize: "10px", color: "#888", marginBottom: "6px" }}>→ {s}</div>
                 ))}
               </div>
@@ -3028,14 +3035,14 @@ ${brand.email || ""}`;
                   color: "#f5a623",
                   icon: "📊",
                   steps: [
-                    "Your home base. Open this first every morning.",
-                    "Quick Stats show total bids, submitted, won, and lost counts at a glance.",
-                    "Win Rate Analytics shows your close rate and average bid size — only populates after you save jobs.",
-                    "Active Jobs shows every project with its status, bid value, and revision count.",
-                    "Mark jobs WON → a green close-out panel appears to enter actual revenue and cost.",
-                    "Profit by Pour Type chart appears once you have closed jobs with actuals entered — shows which work makes you the most money.",
-                    "LOAD button on any job card restores that bid to the Bid Engine.",
-                    "REBID copies all specs from a job into a fresh bid — use this when a GC asks for a revised number.",
+                    "Your Monday morning ops view. Open this first.",
+                    "Left panel shows 4 key numbers: Pipeline Value (sum of all submitted bids), Close Rate (won vs decided), Jobs Tracked, and Avg Margin (from closed jobs with actuals).",
+                    "EXPIRING THIS WEEK — submitted bids hitting their 30-day window. Hit REVISE to load and update.",
+                    "ACTION NEEDED — WON jobs with no actual cost entered yet. Enter actuals to track margin.",
+                    "SUBMITTED — all outstanding bids with days-until-expiry. One-click WON or LOST buttons to update status.",
+                    "CLOSED JOBS — profit summary showing actual margin on each completed job.",
+                    "BEST MARGIN WORK appears once you have closed jobs with actuals — shows which pour type makes you the most money.",
+                    "+ NEW BID button in left panel jumps directly to Bid Engine.",
                   ]
                 },
                 {
@@ -3138,7 +3145,7 @@ ${brand.email || ""}`;
                   "Mark job SUBMITTED on Dashboard",
                   "GC awards job → mark WON → generate Change Orders as scope evolves",
                   "Job complete → enter actual revenue and cost in close-out panel",
-                  "Review Profit by Pour Type on Dashboard to understand where you make money",
+                  "Review Dashboard → Closed Jobs and Best Margin Work to understand where you make money",
                 ].map((step, i) => (
                   <div key={i} style={{ display: "flex", gap: "12px", marginBottom: "8px", alignItems: "flex-start" }}>
                     <span style={{ background: "#f5a62322", color: "#f5a623", border: "1px solid #f5a62344", borderRadius: "50%", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", flexShrink: 0 }}>{i + 1}</span>
